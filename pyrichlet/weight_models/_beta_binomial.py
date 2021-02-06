@@ -1,11 +1,9 @@
 from ._base import BaseWeights
 import numpy as np
 from scipy.stats import beta, binom
-from scipy.optimize import minimize, brentq
-from scipy.integrate import quad
 
 
-class DGBBProcess(BaseWeights):
+class BetaBinomial(BaseWeights):
     def __init__(self, p=0.5, theta=1, p_a=1, p_b=1, rng=None):
         super().__init__(rng=rng)
         self.p = p
@@ -98,7 +96,7 @@ class DGBBProcess(BaseWeights):
             self.v = np.concatenate((self.v, temp_v[mask_change]))
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
-            return self.w
+        return self.w
 
     def tail(self, x):
         if x >= 1 or x < 0:

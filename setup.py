@@ -12,10 +12,12 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/cabo40/pyrichlet",
-    packages=setuptools.find_packages(),
+    license='GPL3',
+    packages=setuptools.find_packages(exclude=['tests']),
     install_requires=[
         'numpy',
         'scipy',
+        'tqdm',
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

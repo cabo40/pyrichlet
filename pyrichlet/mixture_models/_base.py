@@ -1,8 +1,7 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 import numpy as np
 from tqdm import trange
 from scipy.stats import multivariate_normal
-from itertools import repeat
 from . import _utils
 
 
@@ -37,6 +36,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         self.u = np.array([])
 
+        self.map_sim_params = None
+        self.map_log_likelihood = -np.inf
         self.sim_params = []
         self.n_groups = []
         self.n_atoms = []
@@ -69,10 +70,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.sigma = np.array([self.sigma])
 
             self.weight_model.tail(1 - min(self.u))
-
-            self.d = self.rng.integers(self.weight_model.get_size(),
-                                       size=len(self.y))
-
+            self.d = self.weight_model.random_assignment(len(self.y))
             self._complete_atoms()
         self._train()
 
@@ -83,7 +81,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                   w[self.d] + np.finfo(np.float64).eps)
         self.weight_model.tail(1 - min(self.u))
 
-    def density(self, y, periods=None):
+    def eap_density(self, y, periods=None):
         y_sim = []
         if periods is None:
             for param in self.sim_params:
@@ -102,6 +100,20 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                                     param["u"]))
         return np.array(y_sim).mean(axis=0)
 
+    def map_density(self, y):
+        return _utils.mixture_density(y,
+                                      self.map_sim_params["w"],
+                                      self.map_sim_params["mu"],
+                                      self.map_sim_params["sigma"],
+                                      self.map_sim_params["u"])
+
+    def map_cluster(self, y):
+        return _utils.cluster(y,
+                              self.map_sim_params["w"],
+                              self.map_sim_params["mu"],
+                              self.map_sim_params["sigma"],
+                              self.map_sim_params["u"])
+
     def get_n_groups(self):
         return self.n_groups
 
@@ -111,15 +123,27 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def get_sim_params(self):
         return self.sim_params
 
+    def _get_run_params(self):
+        return {"w": self.weight_model.get_weights(),
+                "mu": self.mu,
+                "sigma": self.sigma,
+                "u": self.u,
+                "d": self.d}
+
     def _save_params(self):
-        self.sim_params.append({"w": self.weight_model.get_weights(),
-                                "mu": self.mu,
-                                "sigma": self.sigma,
-                                "u": self.u,
-                                "d": self.d})
+        self.sim_params.append(self._get_run_params())
         self.n_groups.append(len(np.unique(self.d)))
         self.n_atoms.append(len(self.mu))
-        # self.n_log_likelihood.append(self._full_log_likelihood())
+        self._update_map_params()
+
+    def _update_map_params(self):
+        run_log_likelihood = self._full_log_likelihood()
+        if self.map_log_likelihood < run_log_likelihood:
+            self.map_log_likelihood = run_log_likelihood
+            self.map_sim_params = self._get_run_params()
+        elif self.map_log_likelihood == -np.inf:
+            # It's better than nothing
+            self.map_sim_params = self._get_run_params()
 
     def _update_atoms(self):
         assert len(self.mu) == len(self.sigma)
@@ -161,14 +185,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.sigma = np.concatenate((self.sigma, [temp_sigma]))
 
     def _update_d(self):
-        with np.errstate(divide='ignore'):
-            logproba = np.array([multivariate_normal.logpdf(self.y,
-                                                            self.mu[j],
-                                                            self.sigma[j],
-                                                            1)
-                                 for j in range(self.weight_model.get_size())])
-            logproba += np.log(np.greater.outer(self.weight_model.get_weights(),
-                                                self.u))
+        logproba = self._d_log_likelihood_vector()
         self.d = _utils.gumbel_max_sampling(logproba, rng=self.rng)
 
     def _train(self):
@@ -189,13 +206,31 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self._complete_atoms()
         self._update_d()
 
+    def _d_log_likelihood_vector(self):
+        with np.errstate(divide='ignore'):
+            logproba = np.array([multivariate_normal.logpdf(self.y,
+                                                            self.mu[j],
+                                                            self.sigma[j],
+                                                            1)
+                                 for j in range(self.weight_model.get_size())])
+            logproba += np.log(np.greater.outer(self.weight_model.get_weights(),
+                                                self.u))
+        return logproba
+
+    def _y_log_likelihood(self):
+        ret = 0
+        with np.errstate(divide='ignore'):
+            for di in np.unique(self.d):
+                ret += np.sum(multivariate_normal.logpdf(self.y[self.d == di],
+                                                         self.mu[di],
+                                                         self.sigma[di],
+                                                         1))
+        return ret
+
     def _mixture_log_likelihood(self):
-        ret_log_likelihood = 0
-        ret_log_likelihood += np.sum(multivariate_normal.logpdf(
-            self.y,
-            self.mu[self.d],
-            self.sigma[self.d],
-            1))
+        ret_log_likelihood = self._y_log_likelihood()
+        # Bellow is commented out since d's distribution is discrete uniform
+        # ret_log_likelihood += np.sum(self._d_log_likelihood_vector()[self.d])
         return ret_log_likelihood
 
     def _full_log_likelihood(self):

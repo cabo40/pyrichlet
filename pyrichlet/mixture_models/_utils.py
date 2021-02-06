@@ -70,3 +70,22 @@ def mixture_density(x, w, mu, sigma, u):
 
     ret = np.atleast_2d(ret.dot(mask / mask.sum(0))).mean(1)
     return ret
+
+
+def cluster(x, w, mu, sigma, u):
+    k = len(w)
+    ret = []
+    for j in range(k):
+        ret.append(multivariate_normal.pdf(x,
+                                           mu[j],
+                                           sigma[j],
+                                           1))
+    ret = np.array(ret).T
+    mask = (np.array(list(repeat(u, k))) <
+            np.array(list(repeat(w, len(u)))).transpose())
+
+    weights = (mask / mask.sum(0)).sum(1) / len(u)
+    ret = ret * weights
+    grp = np.argmax(ret, axis=1)
+    u_grp, ret = np.unique(grp, return_inverse=True)
+    return ret, weights[u_grp], mu[u_grp], sigma[u_grp]

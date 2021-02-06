@@ -58,7 +58,7 @@ class DGBProcess(BaseWeights):
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         if len(self.d) == 0:
-            self.random_p()
+            # self.random_p()
             mask_change = self.rng.binomial(n=1, p=1 - self.p, size=size - 1)
             mask_change = np.concatenate(([0], np.cumsum(mask_change)))
             self.v = self.rng.beta(a=1, b=self.theta, size=mask_change[-1] + 1)
@@ -69,9 +69,11 @@ class DGBProcess(BaseWeights):
             self.random_p()
             self.random_bernoullis()
             remap = np.cumsum(self.bernoullis)
-            short_d = remap[self.d]
-            a_c = np.bincount(short_d)
+            a_c = np.bincount(self.d)
             b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
+
+            a_c = np.bincount(remap, a_c)
+            b_c = np.bincount(remap, b_c)
 
             self.v = self.rng.beta(a=1 + a_c, b=self.theta + b_c)
             self.v = self.v[remap]
@@ -98,7 +100,7 @@ class DGBProcess(BaseWeights):
             self.v = np.concatenate((self.v, temp_v[mask_change]))
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
-            return self.w
+        return self.w
 
     def tail(self, x):
         if x >= 1 or x < 0:
@@ -126,4 +128,8 @@ class DGBProcess(BaseWeights):
 
     def random_p(self):
         self.p = self.rng.beta(a=self.p_a + sum(self.bernoullis),
-                               b=self.p_b + sum(1-self.bernoullis))
+                               b=self.p_b + sum(1 - self.bernoullis))
+        return self.p
+
+    def get_p(self):
+        return self.p

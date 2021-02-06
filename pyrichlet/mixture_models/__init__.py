@@ -1,6 +1,9 @@
-# __all__ = ["dirichlet_geometric_exchangeable_process_mixture"]
+__all__ = []
 
-from .dirichlet_geometric_exchangeable_process_mixture import DGEPMixture
-from .dirichlet_geometric_bernoulli_process_mixture import DGBPMixture
-from .dirichlet_process_mixture import DPMixture
-from .geometric_process_mixture import GPMixture
+from ._beta_bernoulli_mixture import BetaBernoulliMixture
+from ._beta_binomial_mixture import BetaBinomialMixture
+from ._beta_in_beta_mixture import BetaInBetaMixture
+from ._dirichlet_distribution_mixture import DirichletDistributionMixture
+from ._dirichlet_process_mixture import DirichletProcessMixture
+from ._geometric_process_mixture import GeometricProcessMixture
+from ._pitman_yor_process_mixture import PitmanYorMixture

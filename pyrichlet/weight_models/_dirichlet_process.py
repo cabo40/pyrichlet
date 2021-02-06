@@ -23,7 +23,7 @@ class DirichletProcess(BaseWeights):
             theta = self.theta
         if len(v) == 0:
             return 0
-        return np.sum(beta.logpdf(self.v, a=1, b=theta))
+        return np.sum(beta.logpdf(v, a=1, b=theta))
 
     def random(self, size=None):
         if size is None and len(self.d) == 0:

@@ -2,7 +2,7 @@ from ._base import BaseGaussianMixture
 from ..weight_models import DirichletProcess
 
 
-class DPMixture(BaseGaussianMixture):
+class DirichletProcessMixture(BaseGaussianMixture):
     def __init__(self, *, theta=1, mu_prior=None,
                  lambda_prior=1, psi_prior=None, nu_prior=None, total_iter=1000,
                  burn_in=100, subsample_steps=1, rng=None):

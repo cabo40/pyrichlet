@@ -1,4 +1,10 @@
-from .dirichlet_process import DirichletProcess
-from .geometric_process import GeometricProcess
-from .dirichlet_geometric_exchangable_process import DGEProcess
-from .dirichlet_geometric_bernoulli_process import DGBProcess
+__all__ = []
+
+from ._dirichlet_distribution import DirichletDistribution
+
+from ._dirichlet_process import DirichletProcess
+from ._pitman_yor_process import PitmanYorProcess
+from ._geometric_process import GeometricProcess
+from ._beta_in_beta import BetaInBeta
+from ._beta_bernoulli import BetaBernoulli
+from ._beta_binomial import BetaBinomial

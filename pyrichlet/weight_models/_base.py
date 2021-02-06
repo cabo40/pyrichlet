@@ -70,6 +70,24 @@ class BaseWeights(metaclass=ABCMeta):
         """Returns the last weighting structure drawn"""
         return self.w
 
+    def get_normalized_weights(self):
+        """Returns the last weighting stricture normalized"""
+        return self.w/np.sum(self.w)
+
+    def get_normalized_cumulative_weights(self):
+        """Returns the normalized cumulative weights"""
+        return np.cumsum(self.get_normalized_weights())
+
     def get_size(self):
         """Returns the size of the truncated weighting structure"""
         return len(self.w)
+
+    def random_assignment(self, size=None):
+        """Returns a sample draw of the categorical assignment from the current
+        state normalized weighting structure"""
+        u = self.rng.uniform(size=size)
+        self.tail(1-np.min(u))
+        inverse_sampling = np.greater.outer(
+            u, self.get_normalized_cumulative_weights()
+        )
+        return np.sum(inverse_sampling, axis=1)

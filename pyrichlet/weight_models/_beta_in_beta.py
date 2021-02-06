@@ -5,22 +5,22 @@ from scipy.optimize import minimize, brentq
 from scipy.integrate import quad
 
 
-class DGEProcess(BaseWeights):
-    def __init__(self, x=0.5, a=1, b=1, theta=1, p_method="static",
+class BetaInBeta(BaseWeights):
+    def __init__(self, x=0.5, a=1, b=1, theta=1, p=None, p_method="static",
                  p_optim_max_steps=10, rng=None):
         super().__init__(rng=rng)
         self.x = x
         self.a = a
         self.b = b
         self.theta = theta
+        if p is None:
+            self.p = self.rng.beta(a=self.a, b=self.b)
+        else:
+            self.p = p
 
-        self.p = self.rng.beta(a=self.a, b=self.b)
         self.p_method = p_method
-
         self.v = np.array([], dtype=np.float64)
-
         self.p_optim_max_steps = p_optim_max_steps
-
         self._validate_params()
 
     def structure_log_likelihood(self, v=None, p=None, x=None, theta=None):
