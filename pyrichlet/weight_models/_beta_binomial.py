@@ -4,13 +4,10 @@ from scipy.stats import beta, binom
 
 
 class BetaBinomial(BaseWeights):
-    def __init__(self, p=0.5, theta=1, p_a=1, p_b=1, rng=None):
+    def __init__(self, n=0, alpha=1, rng=None):
         super().__init__(rng=rng)
-        self.p = p
-        self.p_a = p_a
-        self.p_b = p_b
-
-        self.theta = theta
+        self.n = n
+        self.theta = alpha
 
         self.v = np.array([], dtype=np.float64)
         self.bernoullis = np.array([], dtype=np.int)
@@ -121,6 +118,3 @@ class BetaBinomial(BaseWeights):
         temp_bernoullis = self.rng.binomial(n=1, p=1 - self.p, size=max(self.d))
         self.bernoullis = np.concatenate(([0], temp_bernoullis))
         return self.bernoullis
-
-    def random_p(self):
-        self.p = self.rng.beta(a=self.p_a, b=self.p_b)

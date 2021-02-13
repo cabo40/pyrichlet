@@ -11,6 +11,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                  subsample_steps=1, rng=None):
         if rng is None:
             self.rng = np.random.default_rng()
+        elif type(rng) is int:
+            self.rng = np.random.default_rng(rng)
         else:
             self.rng = rng
 

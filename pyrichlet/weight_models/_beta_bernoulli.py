@@ -6,13 +6,13 @@ from scipy.integrate import quad
 
 
 class BetaBernoulli(BaseWeights):
-    def __init__(self, p=0.5, theta=1, p_a=1, p_b=1, rng=None):
+    def __init__(self, p=0.5, alpha=1, p_a=1, p_b=1, rng=None):
         super().__init__(rng=rng)
         self.p = p
         self.p_a = p_a
         self.p_b = p_b
 
-        self.theta = theta
+        self.theta = alpha
 
         self.v = np.array([], dtype=np.float64)
         self.bernoullis = np.array([], dtype=np.int)

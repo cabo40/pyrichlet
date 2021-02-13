@@ -6,13 +6,13 @@ from scipy.integrate import quad
 
 
 class BetaInBeta(BaseWeights):
-    def __init__(self, x=0.5, a=1, b=1, theta=1, p=None, p_method="static",
+    def __init__(self, x=0.5, alpha=1, a=1, b=1, p=None, p_method="static",
                  p_optim_max_steps=10, rng=None):
         super().__init__(rng=rng)
         self.x = x
         self.a = a
         self.b = b
-        self.theta = theta
+        self.alpha = alpha
         if p is None:
             self.p = self.rng.beta(a=self.a, b=self.b)
         else:
@@ -23,20 +23,20 @@ class BetaInBeta(BaseWeights):
         self.p_optim_max_steps = p_optim_max_steps
         self._validate_params()
 
-    def structure_log_likelihood(self, v=None, p=None, x=None, theta=None):
+    def structure_log_likelihood(self, v=None, p=None, x=None, alpha=None):
         if v is None:
             v = self.v
         if p is None:
             p = self.p
         if x is None:
             x = self.x
-        if theta is None:
-            theta = self.theta
-        log_likelihood = self.weight_log_likelihood(v=v, p=p, x=x, theta=theta)
+        if alpha is None:
+            alpha = self.alpha
+        log_likelihood = self.weight_log_likelihood(v=v, p=p, x=x, alpha=alpha)
         log_likelihood += self.p_log_likelihood(p=p)
         return log_likelihood
 
-    def weight_log_likelihood(self, v=None, p=None, x=None, theta=None, a=None,
+    def weight_log_likelihood(self, v=None, p=None, x=None, alpha=None, a=None,
                               b=None):
         if v is None:
             v = self.v
@@ -44,12 +44,12 @@ class BetaInBeta(BaseWeights):
             p = self.p
         if x is None:
             x = self.x
-        if theta is None:
-            theta = self.theta
+        if alpha is None:
+            alpha = self.alpha
         if a is None:
-            theta = self.theta
+            alpha = self.alpha
         if b is None:
-            theta = self.theta
+            alpha = self.alpha
         if x == 1:
             if len(v) == 0:
                 return 0
@@ -60,7 +60,7 @@ class BetaInBeta(BaseWeights):
         return np.sum(
             beta.logpdf(v,
                         a=1 + x / (1 - x) * p,
-                        b=theta + x / (1 - x) * (1 - p)))
+                        b=alpha + x / (1 - x) * (1 - p)))
 
     def p_log_likelihood(self, p=None, a=None, b=None):
         if p is None:
@@ -81,7 +81,7 @@ class BetaInBeta(BaseWeights):
             self.p = self.rng.beta(a=self.a, b=self.b)
             self.v = self.rng.beta(
                 a=1 + self.x / (1 - self.x) * self.p,
-                b=self.theta + self.x / (1 - self.x) * (1 - self.p),
+                b=self.alpha + self.x / (1 - self.x) * (1 - self.p),
                 size=size
             )
             self.w = self.v * np.cumprod(np.concatenate(([1],
@@ -97,7 +97,7 @@ class BetaInBeta(BaseWeights):
 
             self.v = self.rng.beta(
                 a=1 + self.x / (1 - self.x) * self.p + a_c,
-                b=self.theta + self.x / (1 - self.x) * (1 - self.p) + b_c
+                b=self.alpha + self.x / (1 - self.x) * (1 - self.p) + b_c
             )
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
@@ -113,7 +113,7 @@ class BetaInBeta(BaseWeights):
                 (self.v,
                  self.rng.beta(
                      a=1 + self.x / (1 - self.x) * self.p,
-                     b=self.theta + self.x / (1 - self.x) * (1 - self.p),
+                     b=self.alpha + self.x / (1 - self.x) * (1 - self.p),
                      size=size - len(self.v)))
             )
             self.w = self.v * np.cumprod(np.concatenate(([1],
@@ -130,7 +130,7 @@ class BetaInBeta(BaseWeights):
         while w_sum < x:
             v_to_append = self.rng.beta(
                 a=1 + self.x / (1 - self.x) * self.p,
-                b=self.theta + self.x / (1 - self.x) * (1 - self.p),
+                b=self.alpha + self.x / (1 - self.x) * (1 - self.p),
                 size=1
             )
             self.v = np.concatenate((self.v, v_to_append))
