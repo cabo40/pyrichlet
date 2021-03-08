@@ -1,14 +1,15 @@
-from abc import ABCMeta
-import numpy as np
-from tqdm import trange
 from scipy.stats import multivariate_normal
+import pandas as pd
+import numpy as np
+
+from abc import ABCMeta
 from . import _utils
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
     def __init__(self, weight_model=None, mu_prior=None, lambda_prior=1,
                  psi_prior=None, nu_prior=None, total_iter=1000, burn_in=100,
-                 subsample_steps=1, rng=None):
+                 subsample_steps=1, show_progress=False, rng=None):
         if rng is None:
             self.rng = np.random.default_rng()
         elif type(rng) is int:
@@ -30,23 +31,27 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.weight_model = weight_model
 
         self.y = np.array([])
-
         self.d = np.array([])
-
         self.mu = np.array([])
         self.sigma = np.array([[]])
-
         self.u = np.array([])
+
+        self.affinity_matrix = np.array([])
 
         self.map_sim_params = None
         self.map_log_likelihood = -np.inf
+        self.n_len = 0
         self.sim_params = []
         self.n_groups = []
         self.n_atoms = []
         self.n_log_likelihood = []
+        self.show_progress = show_progress
 
-    def fit(self, y, warm_start=False):
-        self.y = y
+    def fit_gibbs(self, y, warm_start=False):
+        if isinstance(y, pd.DataFrame):
+            self.y = y.to_numpy()
+        else:
+            self.y = y
 
         if self.mu_prior is None:
             self.mu_prior = self.y.mean(axis=0)
@@ -59,9 +64,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.sim_params = []
             self.n_groups = []
             self.n_atoms = []
+            self.n_len = 0
+
+            self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
 
             self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1, len(self.y))
-
             self.mu, self.sigma = _utils.random_normal_invw(
                 mu=self.mu_prior,
                 lam=self.lambda_prior,
@@ -74,7 +81,43 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.weight_model.tail(1 - min(self.u))
             self.d = self.weight_model.random_assignment(len(self.y))
             self._complete_atoms()
-        self._train()
+        self._train_gibbs()
+
+    def fit_em(self, y, n=10, warm_start=False):
+        if isinstance(y, pd.DataFrame):
+            self.y = y.to_numpy()
+        else:
+            self.y = y
+
+        if self.mu_prior is None:
+            self.mu_prior = self.y.mean(axis=0)
+        if self.psi_prior is None:
+            self.psi_prior = np.atleast_2d(np.cov(self.y.T))
+        if self.nu_prior is None:
+            _, self.nu_prior = self.y.shape
+
+        if not warm_start:
+            self.sim_params = []
+            self.n_groups = []
+            self.n_atoms = []
+            self.n_len = 0
+
+            self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
+
+            self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1, len(self.y))
+            self.mu, self.sigma = _utils.random_normal_invw(
+                mu=self.mu_prior,
+                lam=self.lambda_prior,
+                psi=self.psi_prior,
+                nu=self.nu_prior,
+                rng=self.rng)
+            self.mu = np.array([self.mu])
+            self.sigma = np.array([self.sigma])
+
+            self.weight_model.tail(1 - min(self.u))
+            self.d = self.weight_model.random_assignment(len(self.y))
+            self._complete_atoms()
+        self._train_em()
 
     def _update_weights(self):
         self.weight_model.fit(self.d)
@@ -83,7 +126,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                   w[self.d] + np.finfo(np.float64).eps)
         self.weight_model.tail(1 - min(self.u))
 
-    def eap_density(self, y, periods=None):
+    def gibbs_eap_density(self, y, periods=None):
         y_sim = []
         if periods is None:
             for param in self.sim_params:
@@ -102,14 +145,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                                     param["u"]))
         return np.array(y_sim).mean(axis=0)
 
-    def map_density(self, y):
+    def gibbs_map_density(self, y):
         return _utils.mixture_density(y,
                                       self.map_sim_params["w"],
                                       self.map_sim_params["mu"],
                                       self.map_sim_params["sigma"],
                                       self.map_sim_params["u"])
 
-    def map_cluster(self, y):
+    def gibbs_map_cluster(self, y):
         return _utils.cluster(y,
                               self.map_sim_params["w"],
                               self.map_sim_params["mu"],
@@ -137,6 +180,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.n_groups.append(len(np.unique(self.d)))
         self.n_atoms.append(len(self.mu))
         self._update_map_params()
+        self.affinity_matrix += np.equal(self.d, self.d[:, None])
+        self.n_len += 1
 
     def _update_map_params(self):
         run_log_likelihood = self._full_log_likelihood()
@@ -190,23 +235,58 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         logproba = self._d_log_likelihood_vector()
         self.d = _utils.gumbel_max_sampling(logproba, rng=self.rng)
 
-    def _train(self):
-        print("Starting burn-in.")
-        for _ in trange(self.burn_in):
-            self._gibbs_step()
-        print("Finished burn-in.")
-        print("Starting training.")
-        for i in trange(self.total_iter - self.burn_in):
-            self._gibbs_step()
-            if i % self.subsample_steps == 0:
-                self._save_params()
-        print("Finished training.")
+    def _train_gibbs(self):
+        if self.show_progress:
+            print("Starting burn-in.")
+            from tqdm import trange
+            for _ in trange(self.burn_in):
+                self._gibbs_step()
+            print("Finished burn-in.")
+            print("Starting training.")
+            for i in trange(self.total_iter - self.burn_in):
+                self._gibbs_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
+            print("Finished training.")
+        else:
+            for _ in range(self.burn_in):
+                self._gibbs_step()
+            for i in range(self.total_iter - self.burn_in):
+                self._gibbs_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
 
     def _gibbs_step(self):
         self._update_atoms()
         self._update_weights()
         self._complete_atoms()
         self._update_d()
+
+    def _train_em(self):
+        if self.show_progress:
+            print("Starting burn-in.")
+            from tqdm import trange
+            for _ in trange(self.burn_in):
+                self._e_step()
+                self._m_step()
+            print("Finished burn-in.")
+            print("Starting training.")
+            for i in trange(self.total_iter - self.burn_in):
+                self._e_step()
+                self._m_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
+            print("Finished training.")
+        else:
+            for _ in range(self.burn_in):
+                self._e_step()
+                self._m_step()
+            for i in range(self.total_iter - self.burn_in):
+                self._e_step()
+                self._m_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
+
 
     def _d_log_likelihood_vector(self):
         with np.errstate(divide='ignore'):

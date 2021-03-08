@@ -18,5 +18,5 @@ class TestWeightModels(unittest.TestCase):
                                                 random_state=rng) for j in theta])
 
         dgp = mixture_models.BetaInBetaMixture(rng=rng)
-        dgp.fit(y)
+        dgp.fit_gibbs(y)
         pass

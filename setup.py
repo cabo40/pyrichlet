@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="pyrichlet-cabo40", # Replace with your own username
+    name="pyrichlet-cabo40",
     version="0.0.1",
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
@@ -17,8 +17,10 @@ setuptools.setup(
     install_requires=[
         'numpy',
         'scipy',
-        'tqdm',
     ],
+    extras_require={
+        "tqdm": ["tqdm"],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GPL3 License",
