@@ -24,6 +24,7 @@ setuptools.setup(
     install_requires=[
         'numpy',
         'scipy',
+        'pandas'
     ],
     extras_require={
         "tqdm": ["tqdm"],

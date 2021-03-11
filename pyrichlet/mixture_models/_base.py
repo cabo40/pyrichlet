@@ -50,8 +50,12 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def fit_gibbs(self, y, warm_start=False):
         if isinstance(y, pd.DataFrame):
             self.y = y.to_numpy()
-        else:
+        elif isinstance(y, list):
+            self.y = np.array(y)
+        elif isinstance(y, np.ndarray):
             self.y = y
+        else:
+            raise TypeError('type is not valid')
 
         if self.mu_prior is None:
             self.mu_prior = self.y.mean(axis=0)
