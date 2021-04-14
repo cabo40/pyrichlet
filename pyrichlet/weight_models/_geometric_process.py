@@ -53,10 +53,11 @@ class GeometricProcess(BaseWeights):
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         self.p = self.rng.beta(self.a + len(self.d), self.b + self.d.sum())
-
+        if size <= 0:
+            size = 1
         self.v = np.repeat(self.p, size)
         self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                1 - self.v[:-1])))
+                                                     1 - self.v[:-1])))
         return self.w
 
     def complete(self, size):
@@ -71,6 +72,8 @@ class GeometricProcess(BaseWeights):
         if x >= 1 or x < 0:
             raise ValueError("Tail parameter not in range [0,1)")
         size = int(np.log(1 - x) / np.log(1 - self.p))
+        if size <= 0:
+            size = 1
         self.v = np.repeat(self.p, size)
         self.w = self.v * np.cumprod(np.concatenate(([1], 1 - self.v[:-1])))
         return self.w
