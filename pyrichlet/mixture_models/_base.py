@@ -9,7 +9,27 @@ from ..weight_models import BaseWeights
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
-    def __init__(self, weight_model: BaseWeights, mu_prior=None, lambda_prior=1,
+    """
+    Base class for Gaussian Mixture Models
+
+    Warning: This class should not be used directly. Use derived classes
+    instead.
+
+    Parameters
+    ----------
+    Attributes
+    ----------
+    Notes
+    -----
+    References
+    ----------
+    See Also
+    ----------
+    Examples
+    --------
+    """
+
+    def __init__(self, weight_model=None, mu_prior=None, lambda_prior=1,
                  psi_prior=None, nu_prior=None, total_iter=1000, burn_in=100,
                  subsample_steps=1, show_progress=False, rng=None):
         """
@@ -63,6 +83,24 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.show_progress = show_progress
 
     def fit_gibbs(self, y, warm_start=False):
+        """
+        Fit posterior distribution using Gibbs sampling.
+
+        This method does `self.total_iter` steps of the Gibbs sampler and
+        stores the arising variables for a later computation of the expected a
+        posteriori of the probability distribution density or of the clusters.
+
+        Parameters
+        ----------
+        y : {array-like} of shape (n_samples, n_features)
+            The input samples. Use ``dtype=np.float32`` for maximum
+            efficiency.
+
+        warm_start : bool, default=False
+            Whether to continue the sampling process from a past run or start
+            over. If False, the sampling will start from the prior and saved
+            states will be deleted.
+        """
         if isinstance(y, pd.DataFrame):
             self.y = y.to_numpy()
         elif isinstance(y, list):
@@ -136,6 +174,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.d = self.weight_model.random_assignment(len(self.y))
             self._complete_atoms()
         self._train_em()
+
 
     def _update_weights(self):
         self.weight_model.fit(self.d)
@@ -278,8 +317,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                          [np.atleast_2d(temp_sigma)]))
 
     def _update_d(self):
-        logproba = self._d_log_likelihood_vector()
-        self.d = _utils.gumbel_max_sampling(logproba, rng=self.rng)
+        log_prob = self._d_log_likelihood_vector()
+        self.d = _utils.gumbel_max_sampling(log_prob, rng=self.rng)
 
     def _train_gibbs(self):
         if self.show_progress:
@@ -308,30 +347,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self._complete_atoms()
         self._update_d()
 
-    def _train_em(self):
-        if self.show_progress:
-            print("Starting burn-in.")
-            from tqdm import trange
-            for _ in trange(self.burn_in):
-                self._e_step()
-                self._m_step()
-            print("Finished burn-in.")
-            print("Starting training.")
-            for i in trange(self.total_iter - self.burn_in):
-                self._e_step()
-                self._m_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
-            print("Finished training.")
-        else:
-            for _ in range(self.burn_in):
-                self._e_step()
-                self._m_step()
-            for i in range(self.total_iter - self.burn_in):
-                self._e_step()
-                self._m_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
+    def _train_variational(self):
+        pass
 
     def _d_log_likelihood_vector(self):
         with np.errstate(divide='ignore'):
@@ -355,6 +372,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return ret
 
     def _mixture_log_likelihood(self):
+        # TODO should return loglikelihood of atoms
         ret_log_likelihood = self._y_log_likelihood()
         # Bellow is commented out since d's distribution is discrete uniform
         # ret_log_likelihood += np.sum(self._d_log_likelihood_vector()[self.d])

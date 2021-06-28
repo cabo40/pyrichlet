@@ -9,7 +9,7 @@ setuptools.setup(
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
     description="A package for density estimation and clustering using "
-                "infinite gaussian mixtures with stick-breaking weighting"
+                "infinite gaussian mixtures with stick-breaking weighting "
                 "structures",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -24,7 +24,8 @@ setuptools.setup(
     install_requires=[
         'numpy',
         'scipy',
-        'pandas'
+        'pandas',
+        'scikit-learn'
     ],
     extras_require={
         "tqdm": ["tqdm"],
