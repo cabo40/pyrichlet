@@ -5,12 +5,26 @@ import numpy as np
 
 from abc import ABCMeta
 from . import _utils
+from ..weight_models import BaseWeights
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
-    def __init__(self, weight_model=None, mu_prior=None, lambda_prior=1,
+    def __init__(self, weight_model: BaseWeights, mu_prior=None, lambda_prior=1,
                  psi_prior=None, nu_prior=None, total_iter=1000, burn_in=100,
                  subsample_steps=1, show_progress=False, rng=None):
+        """
+        Base class for gaussian mixtures
+        :param weight_model: This para
+        :param mu_prior:
+        :param lambda_prior:
+        :param psi_prior:
+        :param nu_prior:
+        :param total_iter:
+        :param burn_in:
+        :param subsample_steps:
+        :param show_progress:
+        :param rng:
+        """
         if rng is None:
             self.rng = np.random.default_rng()
         elif type(rng) is int:
@@ -107,7 +121,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
             self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
 
-            self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1, len(self.y))
+            self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
+                                      len(self.y))
             self.mu, self.sigma = _utils.random_normal_invw(
                 mu=self.mu_prior,
                 lam=self.lambda_prior,
@@ -129,7 +144,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                   w[self.d] + np.finfo(np.float64).eps)
         self.weight_model.tail(1 - min(self.u))
 
-    def gibbs_eap_density(self, y, periods=None):
+    def gibbs_eap_density(self, y=None, periods=None):
+        if y is None:
+            y = self.y
         y_sim = []
         if periods is None:
             for param in self.sim_params:
@@ -157,7 +174,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                       params["w"],
                                       params["mu"],
                                       params["sigma"],
-                                      params["u"])
+                                      params["u"])[0]
             affinity_matrix += np.equal(grouping, grouping[:, None])
         affinity_matrix /= len(self.sim_params)
         return affinity_matrix
@@ -183,9 +200,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                              self.map_sim_params["mu"],
                              self.map_sim_params["sigma"],
                              self.map_sim_params["u"])
-        if full:
-            return ret
-        return ret[0]
+        if not full:
+            ret = ret[0]
+        return ret
 
     def get_n_groups(self):
         return self.n_groups

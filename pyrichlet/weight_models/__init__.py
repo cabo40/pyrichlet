@@ -1,3 +1,4 @@
+from ._base import BaseWeights
 from ._dirichlet_distribution import DirichletDistribution
 from ._dirichlet_process import DirichletProcess
 from ._pitman_yor_process import PitmanYorProcess
