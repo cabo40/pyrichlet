@@ -1,9 +1,9 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
 import numpy as np
 from scipy.stats import beta, binom
 
 
-class BetaBinomial(BaseWeights):
+class BetaBinomial(BaseWeight):
     def __init__(self, n=0, alpha=1, rng=None):
         super().__init__(rng=rng)
         self.n = n

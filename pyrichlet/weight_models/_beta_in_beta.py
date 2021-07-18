@@ -1,11 +1,11 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
 import numpy as np
 from scipy.stats import beta
 from scipy.optimize import minimize, brentq
 from scipy.integrate import quad
 
 
-class BetaInBeta(BaseWeights):
+class BetaInBeta(BaseWeight):
     def __init__(self, x=0.5, alpha=1, a=1, b=1, p=None, p_method="static",
                  p_optim_max_steps=10, rng=None):
         super().__init__(rng=rng)

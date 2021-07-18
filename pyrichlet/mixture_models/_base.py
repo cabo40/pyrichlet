@@ -5,7 +5,7 @@ import numpy as np
 
 from abc import ABCMeta
 from . import _utils
-from ..weight_models import BaseWeights
+from ..weight_models import BaseWeight
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
@@ -17,34 +17,40 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
     Parameters
     ----------
-    Attributes
-    ----------
-    Notes
-    -----
-    References
-    ----------
-    See Also
-    ----------
-    Examples
-    --------
+    weight_model : pyrichlet.weight_model, default=None
+        The weighting model for the mixing components
+    mu_prior : {array, np.array}, default=None
+        The prior centering parameter of the prior normal - inverse Wishart
+        distribution. If None, the mean of the observations to fit will be used
+    lambda_prior : float, default=1
+        The precision parameter of the prior normal - inverse Wishart
+        distribution.
+    psi_prior : {array, np.array, np.matrix}, default=None
+        The inverse scale matrix of the prior normal - inverse Wishart
+        distribution. If None, the sample variance-covariance matrix will be
+        used.
+    nu_prior : float, default=None
+        The degrees of freedom of the prior normal - inverse Wishart
+        distribution. If None, the dimension of the scale matrix will be used.
+    total_iter : int, default=1000
+        The total number of steps in the Gibbs sampler algorithm.
+    burn_in : int, default=100
+        The number of steps in the Gibbs sampler to discard in expected a
+        posteriori (EAP) estimations.
+    subsample_steps : int, default=1
+        The number of steps to draw before saving the realizations. The steps
+        between savings will be discarded.
+    show_progress : bool, default=False
+        Whether to display the progress with tqdm.
+     rng: {np.random.Generator, int}, default=None
+        The PRNG to use for sampling.
+
     """
 
-    def __init__(self, weight_model=None, mu_prior=None, lambda_prior=1,
-                 psi_prior=None, nu_prior=None, total_iter=1000, burn_in=100,
-                 subsample_steps=1, show_progress=False, rng=None):
-        """
-        Base class for gaussian mixtures
-        :param weight_model: This para
-        :param mu_prior:
-        :param lambda_prior:
-        :param psi_prior:
-        :param nu_prior:
-        :param total_iter:
-        :param burn_in:
-        :param subsample_steps:
-        :param show_progress:
-        :param rng:
-        """
+    def __init__(self, weight_model: BaseWeight = None, mu_prior=None,
+                 lambda_prior=1, psi_prior=None, nu_prior=None,
+                 total_iter=1000, burn_in=100, subsample_steps=1,
+                 show_progress=False, rng=None):
         if rng is None:
             self.rng = np.random.default_rng()
         elif type(rng) is int:
@@ -82,7 +88,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.n_log_likelihood = []
         self.show_progress = show_progress
 
-    def fit_gibbs(self, y, warm_start=False):
+    def fit_gibbs(self, y, warm_start=False, show_progress=None):
         """
         Fit posterior distribution using Gibbs sampling.
 
@@ -93,8 +99,79 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         Parameters
         ----------
         y : {array-like} of shape (n_samples, n_features)
-            The input samples. Use ``dtype=np.float32`` for maximum
-            efficiency.
+            The input sample.
+
+        warm_start : bool, default=False
+            Whether to continue the sampling process from a past run or start
+            over. If False, the sampling will start from the prior and saved
+            states will be deleted.
+
+        show_progress: bool, default=None
+            If show_progress is True, a progress bar from the tqdm library is
+            displayed.
+        """
+        self._initialize_params(y, warm_start=warm_start)
+        if show_progress is not None:
+            self.show_progress = show_progress
+        if self.show_progress:
+            print("Starting burn-in.")
+            from tqdm import trange
+            for _ in trange(self.burn_in):
+                self._gibbs_step()
+            print("Finished burn-in.")
+            print("Starting training.")
+            for i in trange(self.total_iter - self.burn_in):
+                self._gibbs_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
+            print("Finished training.")
+        else:
+            for _ in range(self.burn_in):
+                self._gibbs_step()
+            for i in range(self.total_iter - self.burn_in):
+                self._gibbs_step()
+                if i % self.subsample_steps == 0:
+                    self._save_params()
+
+    def fit_variational(self, y, n=1, warm_start=False, show_progress=None,
+                        tol=1e-8):
+        if show_progress is not None:
+            self.show_progress = show_progress
+        self._initialize_params(y, max_groups=n, warm_start=warm_start)
+        elbo = -np.inf
+        elbo_diff = np.inf
+        if self.show_progress:
+            from tqdm import tqdm
+            with tqdm() as t:
+                while elbo_diff > tol:
+                    self._maximize_variational()
+                    prev_elbo = elbo
+                    elbo = self._calc_elbo()
+                    elbo_diff = abs(prev_elbo - elbo)
+                    t.update()
+        else:
+            while elbo_diff > tol:
+                self._maximize_variational()
+                prev_elbo = elbo
+                elbo = self._calc_elbo()
+                elbo_diff = abs(prev_elbo - elbo)
+
+    def _initialize_params(self, y, max_groups=None, warm_start=False):
+        """
+        Initialize the latent variables
+
+        This method randomly initializes the number of groups, mean and
+        variance variables and the assignation vector for a given vector of
+        observed variables `y`.
+
+        Parameters
+        ----------
+        y : {array-like} of shape (n_samples, n_features)
+            The input sample.
+
+        max_groups: int, default=None
+            Maximum number of groups to assign in the initialization. If None,
+            the  number of groups drawn from the weight model is not caped.
 
         warm_start : bool, default=False
             Whether to continue the sampling process from a past run or start
@@ -115,7 +192,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         if self.psi_prior is None:
             self.psi_prior = np.atleast_2d(np.cov(self.y.T))
         if self.nu_prior is None:
-            _, self.nu_prior = self.y.shape
+            self.nu_prior = self.y.shape[1]
         self.mu = self.mu.reshape(0, *self.mu_prior.shape)
         self.sigma = self.sigma.reshape(0, *self.psi_prior.shape)
 
@@ -124,57 +201,21 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.n_groups = []
             self.n_atoms = []
             self.total_saved_steps = 0
-
             self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
-
             self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
                                       len(self.y))
-            self.weight_model.tail(1 - min(self.u))
-
-            self.d = self.weight_model.random_assignment(len(self.y))
-
-            self._complete_atoms()
-        self._train_gibbs()
-
-    def fit_em(self, y, n=10, warm_start=False):
-        if isinstance(y, pd.DataFrame):
-            self.y = y.to_numpy()
-        else:
-            self.y = y
-
-        if self.mu_prior is None:
-            self.mu_prior = self.y.mean(axis=0)
-        if self.psi_prior is None:
-            self.psi_prior = np.atleast_2d(np.cov(self.y.T))
-        if self.nu_prior is None:
-            _, self.nu_prior = self.y.shape
-        self.mu = self.mu.reshape(0, *self.mu_prior.shape)
-        self.sigma = self.sigma.reshape(0, *self.psi_prior.shape)
-
-        if not warm_start:
-            self.sim_params = []
-            self.n_groups = []
-            self.n_atoms = []
-            self.total_saved_steps = 0
-
-            self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
-
-            self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
-                                      len(self.y))
-            self.mu, self.sigma = _utils.random_normal_invw(
-                mu=self.mu_prior,
-                lam=self.lambda_prior,
-                psi=self.psi_prior,
-                nu=self.nu_prior,
-                rng=self.rng)
-            self.mu = np.array([self.mu])
-            self.sigma = np.array([self.sigma])
-
-            self.weight_model.tail(1 - min(self.u))
+            if max_groups is None:
+                self.weight_model.tail(1 - min(self.u))
+            else:
+                self.weight_model.complete(max_groups)
             self.d = self.weight_model.random_assignment(len(self.y))
             self._complete_atoms()
-        self._train_em()
 
+    def _maximize_variational(self):
+        raise NotImplemented
+
+    def _calc_elbo(self):
+        raise NotImplemented
 
     def _update_weights(self):
         self.weight_model.fit(self.d)
@@ -320,46 +361,25 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         log_prob = self._d_log_likelihood_vector()
         self.d = _utils.gumbel_max_sampling(log_prob, rng=self.rng)
 
-    def _train_gibbs(self):
-        if self.show_progress:
-            print("Starting burn-in.")
-            from tqdm import trange
-            for _ in trange(self.burn_in):
-                self._gibbs_step()
-            print("Finished burn-in.")
-            print("Starting training.")
-            for i in trange(self.total_iter - self.burn_in):
-                self._gibbs_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
-            print("Finished training.")
-        else:
-            for _ in range(self.burn_in):
-                self._gibbs_step()
-            for i in range(self.total_iter - self.burn_in):
-                self._gibbs_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
-
     def _gibbs_step(self):
         self._update_atoms()
         self._update_weights()
         self._complete_atoms()
         self._update_d()
 
-    def _train_variational(self):
-        pass
-
     def _d_log_likelihood_vector(self):
         with np.errstate(divide='ignore'):
-            logproba = np.array([multivariate_normal.logpdf(self.y,
-                                                            self.mu[j],
-                                                            self.sigma[j],
-                                                            1)
-                                 for j in range(self.weight_model.get_size())])
-            logproba += np.log(np.greater.outer(self.weight_model.get_weights(),
-                                                self.u))
-        return logproba
+            log_probability = np.array(
+                [multivariate_normal.logpdf(self.y,
+                                            self.mu[j],
+                                            self.sigma[j],
+                                            1)
+                 for j in range(self.weight_model.get_size())]
+            )
+            log_probability += np.log(np.greater.outer(
+                self.weight_model.get_weights(),
+                self.u))
+        return log_probability
 
     def _y_log_likelihood(self):
         ret = 0
@@ -372,7 +392,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return ret
 
     def _mixture_log_likelihood(self):
-        # TODO should return loglikelihood of atoms
+        # TODO should return log likelihood of atoms
         ret_log_likelihood = self._y_log_likelihood()
         # Bellow is commented out since d's distribution is discrete uniform
         # ret_log_likelihood += np.sum(self._d_log_likelihood_vector()[self.d])

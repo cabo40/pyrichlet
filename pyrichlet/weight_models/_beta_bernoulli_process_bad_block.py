@@ -1,11 +1,11 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
 import numpy as np
 from scipy.stats import beta, binom
 from scipy.optimize import minimize, brentq
 from scipy.integrate import quad
 
 
-class DGBProcess(BaseWeights):
+class DGBProcess(BaseWeight):
     def __init__(self, p=0.5, theta=1, p_a=1, p_b=1, rng=None):
         super().__init__(rng=rng)
         self.p = p

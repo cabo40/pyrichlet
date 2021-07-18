@@ -1,9 +1,13 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
+from ..exceptions import NotFittedError
+from ..utils.functions import mean_log_beta
+
 import numpy as np
 from scipy.stats import beta
+from scipy.special import loggamma
 
 
-class DirichletProcess(BaseWeights):
+class DirichletProcess(BaseWeight):
     def __init__(self, alpha=1, rng=None):
         super().__init__(rng=rng)
         self.alpha = alpha
@@ -74,3 +78,58 @@ class DirichletProcess(BaseWeights):
             self.w = np.concatenate((self.w, [(1 - sum(self.w)) * self.v[-1]]))
             w_sum += self.w[-1]
         return self.w
+
+    def fit_variational(self, variational_d):
+        self.variational_d = variational_d
+        self.variational_k = len(self.variational_d)
+        self.variational_params = np.empty((self.variational_k, 2),
+                                           dtype=np.float64)
+        a_c = np.sum(self.variational_d, 1)
+        b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
+        self.variational_params[:, 0] = 1 + a_c
+        self.variational_params[:, 1] = self.alpha + b_c
+
+    def variational_mean_log_w_j(self, j):
+        if self.variational_d is None:
+            raise NotFittedError
+        res = 0
+        for jj in range(j):
+            res += mean_log_beta(self.variational_params[jj][1],
+                                 self.variational_params[jj][0])
+        res += mean_log_beta(self.variational_params[j, 0],
+                             self.variational_params[j, 1]
+                             )
+        return res
+
+    def variational_mean_log_p_d__w(self, variational_d=None):
+        if variational_d is None:
+            _variational_d = self.variational_d
+            if _variational_d is None:
+                raise NotFittedError
+        else:
+            _variational_d = variational_d
+        res = 0
+        for j, nj in enumerate(np.sum(_variational_d, 1)):
+            res += nj * self.variational_mean_log_w_j(j)
+        return res
+
+    def variational_mean_log_p_w(self):
+        if self.variational_d is None:
+            raise NotFittedError
+        res = 0
+        for params in self.variational_params:
+            res += mean_log_beta(params[1], params[0])
+        res *= self.alpha - 1
+        res += self.variational_k * np.log(self.alpha)
+        return res
+
+    def variational_mean_log_q_w(self):
+        if self.variational_d is None:
+            raise NotFittedError
+        res = 0
+        for params in self.variational_params:
+            res_i = (params[0] - 1) * mean_log_beta(params[0], params[1])
+            res_i += (params[1] - 1) * mean_log_beta(params[1], params[0])
+            res_i += loggamma(params[0] + params[1])
+            res_i -= loggamma(params[0]) + loggamma(params[1])
+        return res

@@ -1,9 +1,9 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
 import numpy as np
 from scipy.stats import beta
 
 
-class PitmanYorProcess(BaseWeights):
+class PitmanYorProcess(BaseWeight):
     def __init__(self, pyd=0, alpha=1, rng=None):
         super().__init__(rng=rng)
         assert -pyd < alpha, "alpha param must be greater than -pyd"

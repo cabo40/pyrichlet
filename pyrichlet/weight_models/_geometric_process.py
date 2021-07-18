@@ -1,9 +1,13 @@
-from ._base import BaseWeights
+from ._base import BaseWeight
+from ..exceptions import NotFittedError
+from ..utils.functions import mean_log_beta
+
 import numpy as np
 from scipy.stats import beta
+from scipy.special import loggamma
 
 
-class GeometricProcess(BaseWeights):
+class GeometricProcess(BaseWeight):
     def __init__(self, a=1, b=1, rng=None):
         super().__init__(rng=rng)
         self.a = a
@@ -65,7 +69,8 @@ class GeometricProcess(BaseWeights):
             raise TypeError("size parameter must be integer or None")
         if len(self.w) < size:
             self.v = np.repeat(self.p, size)
-            self.w = self.v * np.cumprod(np.concatenate(([1], 1 - self.v[:-1])))
+            self.w = self.v * np.cumprod(
+                np.concatenate(([1], 1 - self.v[:-1])))
         return self.w
 
     def tail(self, x):
@@ -80,3 +85,60 @@ class GeometricProcess(BaseWeights):
 
     def get_p(self):
         return self.p
+
+    def fit_variational(self, variational_d):
+        self.variational_d = variational_d
+        self.variational_k = len(self.variational_d)
+        self.variational_params = np.empty(2, dtype=np.float64)
+        self.variational_params[0] = self.a + len(self.variational_d[0]) - 1
+        self.variational_params[1] = self.b + (
+                self.variational_d[1:].T * range(1, 3)).sum()
+
+    def variational_mean_log_w_j(self, j):
+        if self.variational_d is None:
+            raise NotFittedError
+        res = mean_log_beta(self.variational_params[0],
+                            self.variational_params[1]
+                            )
+        if j > 0:
+            res += mean_log_beta(self.variational_params[1],
+                                 self.variational_params[0]
+                                 ) * j
+        return res
+
+    def variational_mean_log_p_d__w(self, variational_d=None):
+        if variational_d is None:
+            _variational_d = self.variational_d
+            if _variational_d is None:
+                raise NotFittedError
+        else:
+            _variational_d = variational_d
+        res = mean_log_beta(self.variational_params[0],
+                            self.variational_params[1]
+                            ) * len(_variational_d[0])
+        e_log_v_bar = mean_log_beta(self.variational_params[1],
+                                    self.variational_params[0]
+                                    )
+        for j, nj in enumerate(np.sum(_variational_d, 1)):
+            res += nj * e_log_v_bar
+        return res
+
+    def variational_mean_log_p_w(self):
+        if self.variational_d is None:
+            raise NotFittedError
+        params = self.variational_params
+        res = mean_log_beta(params[0], params[1]) * (self.a - 1)
+        res += mean_log_beta(params[1], params[0]) * (self.b - 1)
+        res += loggamma(self.a + self.b)
+        res -= loggamma(self.a) + loggamma(self.b)
+        return res
+
+    def variational_mean_log_q_w(self):
+        if self.variational_d is None:
+            raise NotFittedError
+        params = self.variational_params
+        res = mean_log_beta(params[0], params[1]) * (params[0] - 1)
+        res += mean_log_beta(params[1], params[0]) * (params[1] - 1)
+        res += loggamma(params[0] + params[1])
+        res -= loggamma(params[0]) + loggamma(params[1])
+        return res
