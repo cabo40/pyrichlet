@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2020-2021 Fidel Selva
+# License: Apache License 2.0
+
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -5,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pyrichlet",
-    version="0.0.1",
+    version="0.0.2",
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
     description="A package for density estimation and clustering using "
@@ -19,7 +24,7 @@ setuptools.setup(
         'Documentation': 'https://pyrichlet.readthedocs.io',
         'Source Code': 'https://github.com/cabo40/pyrichlet'
     },
-    license='GPL3',
+    license='Apache License, Version 2.0',
     packages=setuptools.find_packages(exclude=['tests']),
     install_requires=[
         'numpy',
@@ -37,7 +42,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',

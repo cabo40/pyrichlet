@@ -1,4 +1,5 @@
 from scipy.stats import invwishart, multivariate_normal
+from scipy.special import digamma, loggamma
 from itertools import repeat
 import numpy as np
 
@@ -72,7 +73,7 @@ def mixture_density(x, w, mu, sigma, u):
     return ret
 
 
-def cluster(x, w, mu, sigma, u):
+def cluster(x, w, mu, sigma, u=None):
     k = len(w)
     assign_prob = []
     for j in range(k):
@@ -81,12 +82,41 @@ def cluster(x, w, mu, sigma, u):
                                                    sigma[j],
                                                    1))
     assign_prob = np.array(assign_prob).T
-    # mask = (np.array(list(repeat(u, k))) <
-    #         np.array(list(repeat(w, len(u)))).transpose())
+    if u is not None:
+        mask = (np.array(list(repeat(u, k))) <
+                np.array(list(repeat(w, len(u)))).transpose())
 
-    # weights = (mask / mask.sum(0)).sum(1) / len(u)
+        w = (mask / mask.sum(0)).sum(1) / len(u)
     assign_prob = assign_prob * w
     grp = np.argmax(assign_prob, axis=1)
     uncertainty = 1 - assign_prob[range(len(x)), grp]
     u_grp, ret = np.unique(grp, return_inverse=True)
     return ret, uncertainty, w[u_grp], mu[u_grp], sigma[u_grp]
+
+
+def log_wishart_normalization_term(precision, scale):
+    dim = precision.shape[0]
+    res = np.log(np.linalg.norm(precision)) * (-scale / 2)
+    inverse_term = np.log(2) * (scale * dim / 2)
+    inverse_term += np.log(np.pi) * (dim * (dim - 1) / 4)
+    for i in range(dim):
+        inverse_term += loggamma((scale - i) / 2)
+    res -= inverse_term
+    return res
+
+
+def e_log_norm_wishart(precision, scale):
+    dim = precision.shape[0]
+    res = np.log(np.linalg.norm(precision))
+    res += dim * np.log(2)
+    for i in range(dim):
+        res += digamma((scale - i) / 2)
+    return res
+
+
+def entropy_wishart(precision, scale):
+    dim = precision.shape[0]
+    res = -log_wishart_normalization_term(precision, scale)
+    res -= (scale - dim - 1) / 2 * e_log_norm_wishart(precision, scale)
+    res += scale * dim / 2
+    return res

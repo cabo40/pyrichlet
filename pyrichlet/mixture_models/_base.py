@@ -70,15 +70,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.nu_prior = nu_prior
 
         self.weight_model = weight_model
-
         self.y = np.array([])
+
+        # Variables used in Gibbs sampler
         self.d = np.array([])
         self.mu = np.array([])
         self.sigma = np.array([[]])
         self.u = np.array([])
-
         self.affinity_matrix = np.array([])
-
         self.map_sim_params = None
         self.map_log_likelihood = -np.inf
         self.total_saved_steps = 0
@@ -86,9 +85,16 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.n_groups = []
         self.n_atoms = []
         self.n_log_likelihood = []
+
+        # Variables used in variational method
+        self.var_k = None
+        self.var_d = None
+        self.var_theta = None
+
         self.show_progress = show_progress
 
-    def fit_gibbs(self, y, warm_start=False, show_progress=None):
+    def fit_gibbs(self, y, max_groups=None, warm_start=False,
+                  show_progress=None):
         """
         Fit posterior distribution using Gibbs sampling.
 
@@ -101,6 +107,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features)
             The input sample.
 
+        max_groups: int, default=None
+            Maximum number of groups to assign in the initialization. If None,
+            the  number of groups drawn from the weight model is not caped.
+
         warm_start : bool, default=False
             Whether to continue the sampling process from a past run or start
             over. If False, the sampling will start from the prior and saved
@@ -110,7 +120,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             If show_progress is True, a progress bar from the tqdm library is
             displayed.
         """
-        self._initialize_params(y, warm_start=warm_start)
+        self._initialize_common_method_params(y)
+        if not warm_start:
+            self._initialize_gibbs_params(max_groups=max_groups)
         if show_progress is not None:
             self.show_progress = show_progress
         if self.show_progress:
@@ -133,96 +145,40 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 if i % self.subsample_steps == 0:
                     self._save_params()
 
-    def fit_variational(self, y, n=1, warm_start=False, show_progress=None,
-                        tol=1e-8):
+    def fit_variational(self, y, n_groups=None, warm_start=False,
+                        show_progress=None, tol=1e-8, max_iter=1e3):
         if show_progress is not None:
             self.show_progress = show_progress
-        self._initialize_params(y, max_groups=n, warm_start=warm_start)
+        self._initialize_common_method_params(y)
+        if not warm_start:
+            if n_groups is None:
+                if hasattr(self, 'n'):
+                    var_k = self.n
+                else:
+                    raise AttributeError("n_groups must be a positive integer")
+            else:
+                var_k = n_groups
+            self._initialize_variational_params(var_k=var_k)
         elbo = -np.inf
         elbo_diff = np.inf
+        iterations = 0
         if self.show_progress:
             from tqdm import tqdm
             with tqdm() as t:
-                while elbo_diff > tol:
+                while elbo_diff > tol and iterations < max_iter:
                     self._maximize_variational()
                     prev_elbo = elbo
                     elbo = self._calc_elbo()
                     elbo_diff = abs(prev_elbo - elbo)
+                    iterations += 1
                     t.update()
         else:
-            while elbo_diff > tol:
+            while elbo_diff > tol and iterations < max_iter:
                 self._maximize_variational()
                 prev_elbo = elbo
                 elbo = self._calc_elbo()
                 elbo_diff = abs(prev_elbo - elbo)
-
-    def _initialize_params(self, y, max_groups=None, warm_start=False):
-        """
-        Initialize the latent variables
-
-        This method randomly initializes the number of groups, mean and
-        variance variables and the assignation vector for a given vector of
-        observed variables `y`.
-
-        Parameters
-        ----------
-        y : {array-like} of shape (n_samples, n_features)
-            The input sample.
-
-        max_groups: int, default=None
-            Maximum number of groups to assign in the initialization. If None,
-            the  number of groups drawn from the weight model is not caped.
-
-        warm_start : bool, default=False
-            Whether to continue the sampling process from a past run or start
-            over. If False, the sampling will start from the prior and saved
-            states will be deleted.
-        """
-        if isinstance(y, pd.DataFrame):
-            self.y = y.to_numpy()
-        elif isinstance(y, list):
-            self.y = np.array(y)
-        elif isinstance(y, np.ndarray):
-            self.y = y
-        else:
-            raise TypeError('type is not valid')
-
-        if self.mu_prior is None:
-            self.mu_prior = self.y.mean(axis=0)
-        if self.psi_prior is None:
-            self.psi_prior = np.atleast_2d(np.cov(self.y.T))
-        if self.nu_prior is None:
-            self.nu_prior = self.y.shape[1]
-        self.mu = self.mu.reshape(0, *self.mu_prior.shape)
-        self.sigma = self.sigma.reshape(0, *self.psi_prior.shape)
-
-        if not warm_start:
-            self.sim_params = []
-            self.n_groups = []
-            self.n_atoms = []
-            self.total_saved_steps = 0
-            self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
-            self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
-                                      len(self.y))
-            if max_groups is None:
-                self.weight_model.tail(1 - min(self.u))
-            else:
-                self.weight_model.complete(max_groups)
-            self.d = self.weight_model.random_assignment(len(self.y))
-            self._complete_atoms()
-
-    def _maximize_variational(self):
-        raise NotImplemented
-
-    def _calc_elbo(self):
-        raise NotImplemented
-
-    def _update_weights(self):
-        self.weight_model.fit(self.d)
-        w = self.weight_model.random()
-        self.u = self.rng.uniform(0 + np.finfo(np.float64).eps,
-                                  w[self.d] + np.finfo(np.float64).eps)
-        self.weight_model.tail(1 - min(self.u))
+                iterations += 1
 
     def gibbs_eap_density(self, y=None, periods=None):
         if y is None:
@@ -293,6 +249,77 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def get_sim_params(self):
         return self.sim_params
 
+    def _initialize_common_method_params(self, y):
+        """
+        Initialize the prior variables if not given
+        """
+        if isinstance(y, pd.DataFrame):
+            self.y = y.to_numpy()
+        elif isinstance(y, list):
+            self.y = np.array(y)
+        elif isinstance(y, np.ndarray):
+            self.y = y
+        else:
+            raise TypeError('type is not valid')
+
+        if self.mu_prior is None:
+            self.mu_prior = self.y.mean(axis=0)
+        if self.psi_prior is None:
+            self.psi_prior = np.atleast_2d(np.cov(self.y.T))
+        if self.nu_prior is None:
+            self.nu_prior = self.y.shape[1]
+        self.mu = self.mu.reshape(0, *self.mu_prior.shape)
+        self.sigma = self.sigma.reshape(0, *self.psi_prior.shape)
+
+    def _initialize_gibbs_params(self, max_groups=None):
+        """
+        Initialize the Gibbs sampler latent variables
+
+        This method randomly initializes the number of groups, mean and
+        variance variables and the assignation vector.
+
+        Parameters
+        ----------
+        max_groups: int, default=None
+            Maximum number of groups to assign in the initialization. If None,
+            the  number of groups drawn from the weight model is not caped.
+        """
+        self.sim_params = []
+        self.n_groups = []
+        self.n_atoms = []
+        self.total_saved_steps = 0
+        self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
+        self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
+                                  len(self.y))
+        if max_groups is None:
+            self.weight_model.tail(1 - min(self.u))
+        else:
+            self.weight_model.complete(max_groups)
+        self.d = self.weight_model.random_assignment(len(self.y))
+        self._complete_atoms()
+
+    def _initialize_variational_params(self, var_k):
+        """
+        Initialize the variational parameters for the variational distributions
+
+        This method randomly initializes the parameters for the assignation
+        vector distribution, assigns the variational Normal-Wishart parameters
+        and fits the weight_model.
+
+        Parameters
+        ----------
+        var_k: int
+            Maximum number of groups to assign in the initialization. If None,
+            the  number of groups drawn from the weight model is not caped.
+        """
+        self.var_k = var_k
+        self.var_d = self.rng.random((self.var_k, self.y.shape[0]))
+        self.var_d /= self.var_d.sum(0)
+        self.var_theta = [[self.mu_prior, self.lambda_prior,
+                           np.linalg.inv(self.psi_prior),
+                           self.nu_prior]] * self.var_k
+        self.weight_model.fit_variational(self.var_d)
+
     def _get_run_params(self):
         return {"w": self.weight_model.get_weights(),
                 "mu": self.mu,
@@ -316,6 +343,13 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         elif self.map_log_likelihood == -np.inf:
             # It's better than nothing
             self.map_sim_params = self._get_run_params()
+
+    def _update_weights(self):
+        self.weight_model.fit(self.d)
+        w = self.weight_model.random()
+        self.u = self.rng.uniform(0 + np.finfo(np.float64).eps,
+                                  w[self.d] + np.finfo(np.float64).eps)
+        self.weight_model.tail(1 - min(self.u))
 
     def _update_atoms(self):
         assert len(self.mu) == len(self.sigma)
@@ -402,3 +436,125 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         ret = self._mixture_log_likelihood()
         ret += self.weight_model.structure_log_likelihood()
         return ret
+
+    def _maximize_variational(self):
+        self._update_var_w()
+        self._update_var_theta()
+        self._update_var_d()
+
+    def _calc_elbo(self):
+        ret = 0
+        ret += self._e_q_log_p_x()
+        ret += self._e_q_log_p_d__w()
+        ret += self._e_log_p_w()
+        ret += self._e_log_p_theta()
+        ret -= self._e_log_q_d()
+        ret -= self._e_loq_q_w()
+        ret -= self._e_log_q_theta()
+        return ret
+
+    def _update_var_w(self):
+        self.weight_model.fit_variational(self.var_d)
+
+    def _update_var_theta(self):
+        var_theta = []
+        for vd_j in self.var_d:
+            n_j = vd_j.sum()
+            x_bar_j = (vd_j / n_j) @ self.y
+            ns_j = (vd_j * (self.y - x_bar_j).T) @ (self.y - x_bar_j)
+            v_lambda_j = self.lambda_prior + n_j
+            v_scale_j = self.nu_prior + n_j
+            v_mu_j = (self.lambda_prior * self.mu_prior +
+                      n_j * x_bar_j) / v_lambda_j
+            v_precision_j = (self.psi_prior + ns_j +
+                             self.lambda_prior * n_j / (self.lambda_prior +
+                                                        n_j) *
+                             (x_bar_j - self.mu_prior) @ (x_bar_j -
+                                                          self.mu_prior))
+            v_precision_j = np.linalg.inv(v_precision_j)
+            var_theta.append([v_mu_j, v_lambda_j, v_precision_j, v_scale_j])
+        self.var_theta = var_theta
+
+    def _update_var_d(self):
+        dim = self.y.shape[1]
+        var_d = np.zeros((self.var_k, self.y.shape[0]), dtype=np.float64)
+        for j, vt_j in enumerate(self.var_theta):
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            log_d_ji = self.weight_model.variational_mean_log_w_j(j)
+            log_d_ji += _utils.e_log_norm_wishart(v_precision_j, v_scale_j) / 2
+            log_d_ji -= dim / (2 * v_lambda_j)
+            log_d_ji -= (v_scale_j / 2 *
+                         ((self.y - v_mu_j).T * (
+                                 v_precision_j @ (self.y - v_mu_j).T)).sum(0)
+                         )
+            var_d[j, :] = log_d_ji
+        var_d -= var_d.mean(0)
+        var_d = np.exp(var_d)
+        var_d += np.finfo(np.float64).eps
+        var_d /= var_d.sum(0)
+        self.var_d = var_d
+
+    def _e_q_log_p_x(self):
+        dim = self.y.shape[1]
+        res = 0
+        for vd_j, vt_j in zip(self.var_d, self.var_theta):
+            n_j = vd_j.sum()
+            x_bar_j = (vd_j / n_j) @ self.y
+            s_j = (vd_j / n_j * (self.y - x_bar_j).T) @ (self.y - x_bar_j)
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            res += _utils.e_log_norm_wishart(v_precision_j, v_scale_j)
+            res -= dim / v_lambda_j
+            res -= v_scale_j * np.einsum('ij,ji->', s_j, v_precision_j)
+            res -= (v_scale_j *
+                    (x_bar_j - v_mu_j) @ v_precision_j @ (x_bar_j - v_mu_j)
+                    )
+        res -= dim * np.log(2 * np.pi) * self.var_k
+        res /= 2
+        return res
+
+    def _e_q_log_p_d__w(self):
+        return self.weight_model.variational_mean_log_p_d__w(
+            variational_d=self.var_d
+        )
+
+    def _e_log_p_w(self):
+        return self.weight_model.variational_mean_log_p_w()
+
+    def _e_log_p_theta(self):
+        dim = self.y.shape[1]
+        res = 0
+        for vt_j in self.var_theta:
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            res += (self.nu_prior -
+                    dim) * _utils.e_log_norm_wishart(v_precision_j, v_scale_j)
+            res -= dim * self.lambda_prior / v_lambda_j
+            res -= v_scale_j * np.einsum('ij,ji->',
+                                         self.psi_prior, v_precision_j)
+            res -= (self.lambda_prior * v_scale_j *
+                    (v_mu_j - self.mu_prior) @ v_precision_j @ (v_mu_j -
+                                                                self.mu_prior)
+                    )
+        res += dim * (np.log(self.lambda_prior / (2 * np.pi))) * self.var_k
+        res /= 2
+        res += self.var_k * _utils.log_wishart_normalization_term(
+            np.linalg.inv(self.psi_prior), self.nu_prior
+        )
+        return res
+
+    def _e_log_q_d(self):
+        return np.sum(self.var_d * np.log(self.var_d))
+
+    def _e_loq_q_w(self):
+        return self.weight_model.variational_mean_log_p_w()
+
+    def _e_log_q_theta(self):
+        dim = self.y.shape[1]
+        res = 0
+        for vt_j in self.var_theta:
+            _, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            res += _utils.e_log_norm_wishart(v_precision_j, v_scale_j)
+            res += dim * (np.log(v_lambda_j / (2 * np.pi)))
+            res -= _utils.entropy_wishart(v_precision_j, v_scale_j)
+        res += dim * self.var_k
+        res /= 2
+        return res

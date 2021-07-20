@@ -1,5 +1,3 @@
-__all__ = []
-
 from ._beta_bernoulli_mixture import BetaBernoulliMixture
 from ._beta_binomial_mixture import BetaBinomialMixture
 from ._beta_in_beta_mixture import BetaInBetaMixture
