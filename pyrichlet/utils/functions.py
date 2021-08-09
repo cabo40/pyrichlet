@@ -1,7 +1,25 @@
-__all__ = ["mean_log_beta"]
-
-from scipy.special import digamma
+import numpy as np
+from scipy.special import digamma, loggamma
 
 
 def mean_log_beta(a, b):
     return digamma(a) - digamma(a + b)
+
+
+def density_students_t(x, mu, precision, nu):
+    dim = x.shape[1]
+    density = np.exp(loggamma((nu + dim) / 2) - loggamma(nu / 2))
+    density *= np.linalg.norm(precision) ** 0.5 / (nu * np.pi) ** (dim / 2)
+    density *= (1 + np.einsum('ij,jk,ik->i',
+                              x - mu, precision, x - mu
+                              ) / nu) ** (-(nu + dim) / 2)
+    return density
+
+
+def density_normal(x, mu, precision):
+    dim = x.shape[1]
+    density = np.sqrt((2 * np.pi) ** -dim * np.linalg.norm(precision))
+    density *= np.exp(- np.einsum('ij,jk,ik->i',
+                                  x - mu, precision, x - mu
+                                  ) / 2)
+    return density

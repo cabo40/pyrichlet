@@ -1,11 +1,11 @@
 # Project description
 
-Pyrichlet is a package useful for doing data analysis via density estimation and clustering using gaussian mixtures with
-weighting structures generated with the stick-breaking method.
+Pyrichlet is a package useful for doing data analysis via density estimation
+and clustering using gaussian mixtures with selected weightings.
 
 # Installation
 
-This project is hosted in pip, it's enought to do
+This project is hosted in pip, to install you can execute
 
 ```
 pip install pyrichlet
@@ -39,7 +39,7 @@ For each weighting structure there is an associated gaussian mixture model, form
 - `PitmanYorMixture`
 - `GeometricProcessMixture`
 - `BetaInBetaMixture`
-- `BetaInDirichletProcess`
+- `BetaInDirichletMixture`
 - `BetaBernoulliMixture`
 - `BetaBinomialMixture`
 

@@ -91,7 +91,7 @@ def cluster(x, w, mu, sigma, u=None):
     grp = np.argmax(assign_prob, axis=1)
     uncertainty = 1 - assign_prob[range(len(x)), grp]
     u_grp, ret = np.unique(grp, return_inverse=True)
-    return ret, uncertainty, w[u_grp], mu[u_grp], sigma[u_grp]
+    return ret, uncertainty
 
 
 def log_wishart_normalization_term(precision, scale):

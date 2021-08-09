@@ -4,8 +4,10 @@ import pandas as pd
 import numpy as np
 
 from abc import ABCMeta
+
 from . import _utils
 from ..weight_models import BaseWeight
+from ..utils.functions import density_students_t, density_normal
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
@@ -201,6 +203,15 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                                     param["u"]))
         return np.array(y_sim).mean(axis=0)
 
+    def gibbs_map_density(self, y=None):
+        if y is None:
+            y = self.y
+        return _utils.mixture_density(y,
+                                      self.map_sim_params["w"],
+                                      self.map_sim_params["mu"],
+                                      self.map_sim_params["sigma"],
+                                      self.map_sim_params["u"])
+
     def gibbs_eap_affinity_matrix(self, y=None):
         if y is None:
             return self.affinity_matrix / self.total_saved_steps
@@ -219,15 +230,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed')
         return sc.fit_predict(self.gibbs_eap_affinity_matrix(y))
 
-    def gibbs_map_density(self, y=None):
-        if y is None:
-            y = self.y
-        return _utils.mixture_density(y,
-                                      self.map_sim_params["w"],
-                                      self.map_sim_params["mu"],
-                                      self.map_sim_params["sigma"],
-                                      self.map_sim_params["u"])
-
     def gibbs_map_cluster(self, y=None, full=False):
         if y is None:
             y = self.y
@@ -239,6 +241,97 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         if not full:
             ret = ret[0]
         return ret
+
+    def var_eap_density(self, y=None):
+        if y is None:
+            _y = self.y
+        else:
+            if isinstance(y, pd.DataFrame):
+                _y = y.to_numpy()
+            elif isinstance(y, list):
+                _y = np.array(y)
+                if _y.ndim == 1:
+                    _y = _y.reshape(-1, 1)
+            elif isinstance(y, np.ndarray):
+                if y.ndim == 1:
+                    _y = y.copy()
+                    _y = y.reshape(-1, 1)
+                else:
+                    _y = y
+        dim = _y.shape[1]
+        f_x = np.zeros(len(_y))
+        for j, vt_j in enumerate(self.var_theta):
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            f_x += density_students_t(
+                _y, v_mu_j,
+                v_precision_j * (v_scale_j + 1 -
+                                 dim) * v_lambda_j / (1 + v_lambda_j),
+                v_scale_j + 1 - dim
+            ) * self.weight_model.variational_mean_w(j)
+        return f_x
+
+    def var_map_density(self, y=None):
+        if y is None:
+            _y = self.y
+        else:
+            if isinstance(y, pd.DataFrame):
+                _y = y.to_numpy()
+            elif isinstance(y, list):
+                _y = np.array(y)
+                if _y.ndim == 1:
+                    _y = _y.reshape(-1, 1)
+            elif isinstance(y, np.ndarray):
+                if y.ndim == 1:
+                    _y = y.copy()
+                    _y = y.reshape(-1, 1)
+                else:
+                    _y = y
+        dim = _y.shape[1]
+        f_x = np.zeros(len(_y))
+        for j, vt_j in enumerate(self.var_theta):
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            map_mu = v_mu_j
+            map_precision = (v_scale_j - dim) * v_precision_j
+            f_x += density_normal(_y, map_mu, map_precision
+                                  ) * self.weight_model.variational_mode_w(j)
+        return f_x
+
+    def var_map_cluster(self, y=None, full=False):
+        if y is None:
+            if not full:
+                return self.var_d.argmax(0)
+            else:
+                d = self.var_d.argmax(0)
+                return d, self.var_d[d]
+        if isinstance(y, pd.DataFrame):
+            _y = y.to_numpy()
+        elif isinstance(y, list):
+            _y = np.array(y)
+            if _y.ndim == 1:
+                _y = _y.reshape(-1, 1)
+        else:
+            _y = y
+        dim = _y.shape[1]
+        var_d = np.zeros((self.var_k, _y.shape[0]), dtype=np.float64)
+        for j, vt_j in enumerate(self.var_theta):
+            v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            log_d_ji = self.weight_model.variational_mean_log_w_j(j)
+            log_d_ji += _utils.e_log_norm_wishart(v_precision_j, v_scale_j) / 2
+            log_d_ji -= dim / (2 * v_lambda_j)
+            log_d_ji -= (v_scale_j / 2 *
+                         ((_y - v_mu_j).T * (
+                                 v_precision_j @ (_y - v_mu_j).T)).sum(0)
+                         )
+            var_d[j, :] = log_d_ji
+        var_d -= var_d.mean(0)
+        var_d = np.exp(var_d)
+        var_d += np.finfo(np.float64).eps
+        var_d /= var_d.sum(0)
+        if not full:
+            return var_d.argmax(0)
+        else:
+            d = var_d.argmax(0)
+            return d, var_d[d]
 
     def get_n_groups(self):
         return self.n_groups
@@ -253,7 +346,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         """
         Initialize the prior variables if not given
         """
-        if isinstance(y, pd.DataFrame):
+        if isinstance(y, (pd.DataFrame, pd.Series)):
             self.y = y.to_numpy()
         elif isinstance(y, list):
             self.y = np.array(y)
@@ -261,15 +354,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.y = y
         else:
             raise TypeError('type is not valid')
-
+        if self.y.ndim == 1:
+            self.y = self.y.reshape(-1, 1)
         if self.mu_prior is None:
             self.mu_prior = self.y.mean(axis=0)
         if self.psi_prior is None:
             self.psi_prior = np.atleast_2d(np.cov(self.y.T))
         if self.nu_prior is None:
             self.nu_prior = self.y.shape[1]
-        self.mu = self.mu.reshape(0, *self.mu_prior.shape)
-        self.sigma = self.sigma.reshape(0, *self.psi_prior.shape)
 
     def _initialize_gibbs_params(self, max_groups=None):
         """
@@ -284,6 +376,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             Maximum number of groups to assign in the initialization. If None,
             the  number of groups drawn from the weight model is not caped.
         """
+        self.mu = np.empty((0, *self.mu_prior.shape))
+        self.sigma = np.empty((0, *self.psi_prior.shape))
         self.sim_params = []
         self.n_groups = []
         self.n_atoms = []
@@ -315,9 +409,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.var_k = var_k
         self.var_d = self.rng.random((self.var_k, self.y.shape[0]))
         self.var_d /= self.var_d.sum(0)
-        self.var_theta = [[self.mu_prior, self.lambda_prior,
-                           np.linalg.inv(self.psi_prior),
-                           self.nu_prior]] * self.var_k
+        # self.var_theta = [[self.mu_prior, self.lambda_prior,
+        #                    np.linalg.inv(self.psi_prior),
+        #                    self.nu_prior]] * self.var_k
         self.weight_model.fit_variational(self.var_d)
 
     def _get_run_params(self):
@@ -438,8 +532,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return ret
 
     def _maximize_variational(self):
-        self._update_var_w()
         self._update_var_theta()
+        self._update_var_w()
         self._update_var_d()
 
     def _calc_elbo(self):

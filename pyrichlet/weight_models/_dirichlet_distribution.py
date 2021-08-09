@@ -58,7 +58,7 @@ class DirichletDistribution(BaseWeight):
 
     def tail(self, x=None):
         if len(self.w) == 0:
-            self.random(None)
+            self.random()
         return self.w
 
     def fit_variational(self, variational_d):
@@ -111,12 +111,32 @@ class DirichletDistribution(BaseWeight):
         )
         return res
 
+    def variational_mean_w(self, j):
+        if j > self.variational_k:
+            return 0
+        return self.variational_params[j] / self.variational_params.sum()
+
+    def variational_mode_w(self, j):
+        if j > self.variational_k:
+            return 0
+        alpha = self.variational_params.sum()
+        if self.variational_params[j] <= 1:
+            if alpha - self.variational_params[j] <= 1:
+                raise ValueError('multimodal distribution')
+            else:
+                return 0
+        elif alpha - self.variational_params[j] <= 1:
+            return 1
+        res = ((self.variational_params[j] - 1) /
+               (alpha - 2))
+        return res
+
     def _log_normalization_constant(self, alpha=None):
         if alpha is None:
             _alpha = self.alpha
         else:
             _alpha = alpha
         log_sum = loggamma(np.sum(_alpha))
-        for a_i in _alpha:
-            log_sum -= loggamma(a_i)
+        for a_j in _alpha:
+            log_sum -= loggamma(a_j)
         return log_sum
