@@ -5,3 +5,5 @@ from ._dirichlet_distribution_mixture import DirichletDistributionMixture
 from ._dirichlet_process_mixture import DirichletProcessMixture
 from ._geometric_process_mixture import GeometricProcessMixture
 from ._pitman_yor_process_mixture import PitmanYorMixture
+from ._equal_weighted_mixture import EqualWeightedMixture
+from ._frequency_weighted_mixture import FrequencyWeightedMixture
