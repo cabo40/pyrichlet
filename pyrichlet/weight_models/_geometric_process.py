@@ -91,8 +91,10 @@ class GeometricProcess(BaseWeight):
         self.variational_k = len(self.variational_d)
         self.variational_params = np.empty(2, dtype=np.float64)
         self.variational_params[0] = self.a + len(self.variational_d[0]) - 1
-        self.variational_params[1] = self.b + (
-                self.variational_d[1:].T * range(1, 3)).sum()
+        self.variational_params[1] = (
+                self.b + (self.variational_d[1:].T *
+                          range(1, self.variational_k)).sum()
+        )
 
     def variational_mean_log_w_j(self, j):
         if self.variational_d is None:
@@ -141,4 +143,25 @@ class GeometricProcess(BaseWeight):
         res += mean_log_beta(params[1], params[0]) * (params[1] - 1)
         res += loggamma(params[0] + params[1])
         res -= loggamma(params[0]) + loggamma(params[1])
+        return res
+
+    def variational_mean_w(self, j):
+        if j >= self.variational_k:
+            return 1
+        p = self.variational_params[0] / self.variational_params.sum()
+        return p * (1 - p) ** j
+
+    def variational_mode_w(self, j):
+        if j > self.variational_k:
+            return
+        if self.variational_params[0] <= 1:
+            if self.variational_params[1] <= 1:
+                raise ValueError('multimodal distribution')
+            else:
+                return 0
+        elif self.variational_params[1] <= 1:
+            return 1 * (j == 0)
+        p = ((self.variational_params[0] - 1) /
+             (self.variational_params.sum() - 2))
+        res = (1 - p) ** j * p
         return res
