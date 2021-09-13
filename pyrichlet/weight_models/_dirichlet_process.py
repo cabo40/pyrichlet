@@ -92,13 +92,15 @@ class DirichletProcess(BaseWeight):
     def variational_mean_log_w_j(self, j):
         if self.variational_d is None:
             raise NotFittedError
+        if j >= self.variational_k:
+            return -np.inf
         res = 0
         for jj in range(j):
             res += mean_log_beta(self.variational_params[jj][1],
                                  self.variational_params[jj][0])
-        res += mean_log_beta(self.variational_params[j, 0],
-                             self.variational_params[j, 1]
-                             )
+        if j < self.variational_k - 1:
+            res += mean_log_beta(self.variational_params[j, 0],
+                                 self.variational_params[j, 1])
         return res
 
     def variational_mean_log_p_d__w(self, variational_d=None):
@@ -117,7 +119,7 @@ class DirichletProcess(BaseWeight):
         if self.variational_d is None:
             raise NotFittedError
         res = 0
-        for params in self.variational_params:
+        for params in self.variational_params[:-1]:
             res += mean_log_beta(params[1], params[0])
         res *= self.alpha - 1
         res += self.variational_k * np.log(self.alpha)
@@ -127,9 +129,48 @@ class DirichletProcess(BaseWeight):
         if self.variational_d is None:
             raise NotFittedError
         res = 0
-        for params in self.variational_params:
-            res_i = (params[0] - 1) * mean_log_beta(params[0], params[1])
-            res_i += (params[1] - 1) * mean_log_beta(params[1], params[0])
-            res_i += loggamma(params[0] + params[1])
-            res_i -= loggamma(params[0]) + loggamma(params[1])
+        for params in self.variational_params[:-1]:
+            res += (params[0] - 1) * mean_log_beta(params[0], params[1])
+            res += (params[1] - 1) * mean_log_beta(params[1], params[0])
+            res += loggamma(params[0] + params[1])
+            res -= loggamma(params[0]) + loggamma(params[1])
+        return res
+
+    def variational_mean_w(self, j):
+        if j >= self.variational_k:
+            return 0
+        res = 1
+        for jj in range(j):
+            res *= (self.variational_params[jj][1] /
+                    self.variational_params[jj].sum())
+        if j < self.variational_k - 1:
+            res *= self.variational_params[j, 0] / self.variational_params[
+                j].sum()
+        return res
+
+    def variational_mode_w(self, j):
+        if j >= self.variational_k:
+            return 0
+        res = 1
+        for jj in range(j):
+            if self.variational_params[jj, 1] <= 1:
+                if self.variational_params[jj, 0] <= 1:
+                    raise ValueError('multimodal distribution')
+                else:
+                    return 0
+            elif self.variational_params[jj, 0] <= 1:
+                continue
+            res *= ((self.variational_params[jj, 1] - 1) /
+                    (self.variational_params[jj].sum() - 2))
+        if j == self.variational_k - 1:
+            return res
+        if self.variational_params[j, 0] <= 1:
+            if self.variational_params[j, 1] <= 1:
+                raise ValueError('multimodal distribution')
+            else:
+                return 0
+        elif self.variational_params[j, 1] <= 1:
+            return res
+        res *= ((self.variational_params[j, 0] - 1) /
+                (self.variational_params[j].sum() - 2))
         return res
