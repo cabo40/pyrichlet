@@ -9,6 +9,7 @@ class BaseWeight(metaclass=ABCMeta):
     This abstract class specifies an interface for all weighting structure
     classes and provides basic common methods for weighting models.
     """
+
     def __init__(self, rng=None):
         if rng is None:
             self.rng = np.random.default_rng()
@@ -94,7 +95,7 @@ class BaseWeight(metaclass=ABCMeta):
 
     def get_normalized_weights(self):
         """Returns the last weighting stricture normalized"""
-        return self.w/np.sum(self.w)
+        return self.w / np.sum(self.w)
 
     def get_normalized_cumulative_weights(self):
         """Returns the normalized cumulative weights"""
@@ -113,6 +114,7 @@ class BaseWeight(metaclass=ABCMeta):
         )
         return np.sum(inverse_sampling, axis=1)
 
+    @abstractmethod
     def fit_variational(self, variational_d):
         """Fits the variational distribution q
 
@@ -124,6 +126,7 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def variational_mean_log_w_j(self, j):
         """Returns the mean of the logarithm of w_j
 
@@ -132,29 +135,50 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def variational_mean_log_p_d__w(self, variational_d=None):
         """Returns the mean of log p(d|w)
 
         This method returns the expected value of the logarithm of the
-         probability of assignation d given w under the variational
-         distribution q.
+        probability of assignation d given w under the variational
+        distribution q.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def variational_mean_log_p_w(self):
         """Returns the mean of log p(d|w)
 
         This method returns the expected value of the logarithm of the
-         probability of assignation d given w under the variational
-         distribution q.
+        probability of assignation d given w under the variational
+        distribution q.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def variational_mean_log_q_w(self):
         """Returns the mean of log p(d|w)
 
         This method returns the expected value of the logarithm of the
-         probability of assignation d given w under the variational
-         distribution q.
+        probability of assignation d given w under the variational
+        distribution q.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def variational_mean_w(self, j):
+        """Returns the mean of w_j
+
+        This method returns the expected value of the j-th weighting factor
+        under the variational distribution q.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def variational_mode_w(self, j):
+        """Returns the mean of w_j
+
+        This method returns the expected value of the j-th weighting factor
+        under the variational distribution q.
         """
         raise NotImplementedError

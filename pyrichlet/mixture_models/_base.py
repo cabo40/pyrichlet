@@ -582,7 +582,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                  v_precision_j @ (self.y - v_mu_j).T)).sum(0)
                          )
             var_d[j, :] = log_d_ji
-        var_d -= var_d.mean(0)
+            var_d[j, :] = log_d_ji
+        var_d -= var_d.max(0)
         var_d = np.exp(var_d)
         var_d += np.finfo(np.float64).eps
         var_d /= var_d.sum(0)
