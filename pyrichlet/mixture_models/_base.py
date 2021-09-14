@@ -6,6 +6,7 @@ import numpy as np
 from abc import ABCMeta
 
 from . import _utils
+from ..exceptions import NotFittedError
 from ..weight_models import BaseWeight
 from ..utils.functions import density_students_t, density_normal
 
@@ -93,6 +94,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.var_d = None
         self.var_theta = None
 
+        # Fitting flags
+        self.gibbs_fitted = False
+        self.var_fitted = False
+
         self.show_progress = show_progress
 
     def fit_gibbs(self, y, max_groups=None, warm_start=False,
@@ -146,6 +151,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 self._gibbs_step()
                 if i % self.subsample_steps == 0:
                     self._save_params()
+        self.gibbs_fitted = True
 
     def fit_variational(self, y, n_groups=None, warm_start=False,
                         show_progress=None, tol=1e-8, max_iter=1e3):
@@ -181,8 +187,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 elbo = self._calc_elbo()
                 elbo_diff = abs(prev_elbo - elbo)
                 iterations += 1
+        self.var_fitted = True
 
     def gibbs_eap_density(self, y=None, periods=None):
+        if not self.gibbs_fitted:
+            raise NotFittedError("Object must be fitted with gibbs_fit method")
         if y is None:
             y = self.y
         y_sim = []
@@ -204,6 +213,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return np.array(y_sim).mean(axis=0)
 
     def gibbs_map_density(self, y=None):
+        if not self.gibbs_fitted:
+            raise NotFittedError("Object must be fitted with gibbs_fit method")
         if y is None:
             y = self.y
         return _utils.mixture_density(y,
@@ -213,6 +224,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                       self.map_sim_params["u"])
 
     def gibbs_eap_affinity_matrix(self, y=None):
+        if not self.gibbs_fitted:
+            raise NotFittedError("Object must be fitted with gibbs_fit method")
         if y is None:
             return self.affinity_matrix / self.total_saved_steps
         affinity_matrix = np.zeros((len(y), len(y)))
@@ -227,10 +240,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return affinity_matrix
 
     def gibbs_eap_spectral_consensus_cluster(self, y=None, n_clusters=1):
+        if not self.gibbs_fitted:
+            raise NotFittedError("Object must be fitted with gibbs_fit method")
         sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed')
         return sc.fit_predict(self.gibbs_eap_affinity_matrix(y))
 
     def gibbs_map_cluster(self, y=None, full=False):
+        if not self.gibbs_fitted:
+            raise NotFittedError("Object must be fitted with gibbs_fit method")
         if y is None:
             y = self.y
         ret = _utils.cluster(y,
@@ -243,6 +260,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return ret
 
     def var_eap_density(self, y=None):
+        if not self.var_fitted:
+            raise NotFittedError("Object must be fitted with fit_variational"
+                                 " method")
         if y is None:
             _y = self.y
         else:
@@ -271,6 +291,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return f_x
 
     def var_map_density(self, y=None):
+        if not self.var_fitted:
+            raise NotFittedError("Object must be fitted with fit_variational"
+                                 " method")
         if y is None:
             _y = self.y
         else:
@@ -297,6 +320,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return f_x
 
     def var_map_cluster(self, y=None, full=False):
+        if not self.var_fitted:
+            raise NotFittedError("Object must be fitted with fit_variational"
+                                 " method")
         if y is None:
             if not full:
                 return self.var_d.argmax(0)
@@ -358,8 +384,12 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.y = self.y.reshape(-1, 1)
         if self.mu_prior is None:
             self.mu_prior = self.y.mean(axis=0)
+        else:
+            self.mu_prior = np.array(self.mu_prior)
         if self.psi_prior is None:
             self.psi_prior = np.atleast_2d(np.cov(self.y.T))
+        else:
+            self.psi_prior = np.atleast_2d(self.psi_prior)
         if self.nu_prior is None:
             self.nu_prior = self.y.shape[1]
 
@@ -407,11 +437,18 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             the  number of groups drawn from the weight model is not caped.
         """
         self.var_k = var_k
-        self.var_d = self.rng.random((self.var_k, self.y.shape[0]))
-        self.var_d /= self.var_d.sum(0)
-        # self.var_theta = [[self.mu_prior, self.lambda_prior,
-        #                    np.linalg.inv(self.psi_prior),
-        #                    self.nu_prior]] * self.var_k
+        self.var_theta = []
+        for _ in range(self.var_k):
+            temp_mu, temp_psi = _utils.random_normal_invw(
+                mu=self.mu_prior,
+                lam=self.lambda_prior,
+                psi=self.psi_prior,
+                nu=self.nu_prior,
+                rng=self.rng
+            )
+            self.var_theta.append([temp_mu, self.lambda_prior,
+                                   np.linalg.inv(temp_psi), self.nu_prior])
+        self.var_d = np.tile(1 / self.var_k, (self.var_k, self.y.shape[0]))
         self.weight_model.fit_variational(self.var_d)
 
     def _get_run_params(self):
@@ -532,9 +569,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         return ret
 
     def _maximize_variational(self):
-        self._update_var_theta()
-        self._update_var_w()
         self._update_var_d()
+        self._update_var_w()
+        self._update_var_theta()
 
     def _calc_elbo(self):
         ret = 0
