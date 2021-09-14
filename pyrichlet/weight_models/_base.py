@@ -182,3 +182,21 @@ class BaseWeight(metaclass=ABCMeta):
         under the variational distribution q.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def variational_mean_w(self, j):
+        """Returns the mean of w_j
+
+        This method returns the expected value of the j-th weighting factor
+        under the variational distribution q.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def variational_mode_w(self, j):
+        """Returns the mean of w_j
+
+        This method returns the expected value of the j-th weighting factor
+        under the variational distribution q.
+        """
+        raise NotImplementedError
