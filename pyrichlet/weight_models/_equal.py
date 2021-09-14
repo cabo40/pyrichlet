@@ -5,8 +5,8 @@ import numpy as np
 
 
 class EqualWeighting(BaseWeight):
-    def __init__(self, n=1, rng=None):
-        super().__init__(rng=rng)
+    def __init__(self, n=1):
+        super().__init__()
         self.n = n
 
     def structure_log_likelihood(self):
