@@ -154,7 +154,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.gibbs_fitted = True
 
     def fit_variational(self, y, n_groups=None, warm_start=False,
-                        show_progress=None, tol=1e-8, max_iter=1e3):
+                        show_progress=None, tol=1e-8, max_iter=1e3,
+                        method='kmeans'):
         if show_progress is not None:
             self.show_progress = show_progress
         self._initialize_common_method_params(y)
@@ -166,7 +167,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                     raise AttributeError("n_groups must be a positive integer")
             else:
                 var_k = n_groups
-            self._initialize_variational_params(var_k=var_k)
+            self._initialize_variational_params(var_k=var_k, method=method)
         elbo = -np.inf
         elbo_diff = np.inf
         iterations = 0
@@ -422,7 +423,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.d = self.weight_model.random_assignment(len(self.y))
         self._complete_atoms()
 
-    def _initialize_variational_params(self, var_k):
+    def _initialize_variational_params(self, var_k, method="kmeans"):
         """
         Initialize the variational parameters for the variational distributions
 
@@ -435,20 +436,65 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         var_k: int
             Maximum number of groups to assign in the initialization. If None,
             the  number of groups drawn from the weight model is not caped.
+
+        method: str
+            "kmeans": initialize variational parameters using k-means algorithm
+            "random": initialize variational parameters using a random
+                assignment
         """
         self.var_k = var_k
         self.var_theta = []
-        for _ in range(self.var_k):
-            temp_mu, temp_psi = _utils.random_normal_invw(
-                mu=self.mu_prior,
-                lam=self.lambda_prior,
-                psi=self.psi_prior,
-                nu=self.nu_prior,
-                rng=self.rng
-            )
-            self.var_theta.append([temp_mu, self.lambda_prior,
-                                   np.linalg.inv(temp_psi), self.nu_prior])
-        self.var_d = np.tile(1 / self.var_k, (self.var_k, self.y.shape[0]))
+
+        if method == "kmeans":
+            from sklearn.cluster import KMeans
+            km = KMeans(n_clusters=self.var_k)
+            d = km.fit_predict(self.y)
+            dim = self.y.shape[1]
+            var_d = np.zeros((self.var_k, self.y.shape[0]),
+                             dtype=np.float64)
+            for j in range(self.var_k):
+                y_subset = self.y[d == j]
+                mu_j = np.mean(y_subset, 0)
+                precisions_j = np.linalg.inv(np.cov(y_subset.T))
+                mu_j = np.atleast_1d(mu_j)
+                precisions_j = np.atleast_2d(precisions_j)
+                # atoms initialization
+                self.var_theta.append([mu_j, self.lambda_prior,
+                                       precisions_j, self.nu_prior])
+                # assignations initialization
+                if len(y_subset) == 0:
+                    var_d[j, :] = np.finfo(np.float64).eps
+                    continue
+                log_d_ji = _utils.e_log_norm_wishart(precisions_j,
+                                                     self.nu_prior) / 2
+                log_d_ji -= dim / (2 * self.lambda_prior)
+                log_d_ji -= (self.nu_prior / 2 *
+                             ((self.y - mu_j).T * (precisions_j @ (
+                                     self.y - mu_j).T)).sum(0)
+                             )
+                var_d[j, :] = log_d_ji
+            var_d -= var_d.max(0)
+            var_d = np.exp(var_d)
+            var_d += np.finfo(np.float64).eps
+            var_d /= var_d.sum(0)
+            self.var_d = var_d
+        elif method == "random":
+            for _ in range(self.var_k):
+                mu_j, temp_psi = _utils.random_normal_invw(
+                    mu=self.mu_prior,
+                    lam=self.lambda_prior,
+                    psi=self.psi_prior,
+                    nu=self.nu_prior,
+                    rng=self.rng
+                )
+                mu_j = np.atleast_1d(mu_j)
+                temp_psi = np.atleast_2d(temp_psi)
+                self.var_theta.append([mu_j, self.lambda_prior,
+                                       np.linalg.inv(temp_psi), self.nu_prior])
+            self.var_d = np.tile(1 / self.var_k, (self.var_k, self.y.shape[0]))
+        else:
+            raise AttributeError("method param must be one of 'kmeans', "
+                                 "'random'")
         self.weight_model.fit_variational(self.var_d)
 
     def _get_run_params(self):
