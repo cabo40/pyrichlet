@@ -328,7 +328,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 return self.var_d.argmax(0)
             else:
                 d = self.var_d.argmax(0)
-                return d, self.var_d[d]
+                return d, self.var_d[d, range(len(d))]
         if isinstance(y, pd.DataFrame):
             _y = y.to_numpy()
         elif isinstance(y, list):
