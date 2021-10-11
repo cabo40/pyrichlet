@@ -132,6 +132,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self._initialize_gibbs_params(max_groups=max_groups)
         if show_progress is not None:
             self.show_progress = show_progress
+        # Iterate the Gibbs steps with or without tqdm
         if self.show_progress:
             print("Starting burn-in.")
             from tqdm import trange
@@ -447,7 +448,12 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         if method == "kmeans":
             from sklearn.cluster import KMeans
-            km = KMeans(n_clusters=self.var_k)
+            # TODO wait for sklearn to implement Generator as random_state
+            # input https://github.com/scikit-learn/scikit-learn/issues/16988
+            km = KMeans(
+                n_clusters=self.var_k,
+                random_state=np.random.RandomState(self.rng.bit_generator)
+            )
             d = km.fit_predict(self.y)
             dim = self.y.shape[1]
             var_d = np.zeros((self.var_k, self.y.shape[0]),
@@ -664,7 +670,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                          ((self.y - v_mu_j).T * (
                                  v_precision_j @ (self.y - v_mu_j).T)).sum(0)
                          )
-            var_d[j, :] = log_d_ji
             var_d[j, :] = log_d_ji
         var_d -= var_d.max(0)
         var_d = np.exp(var_d)
