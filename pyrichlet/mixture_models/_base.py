@@ -460,17 +460,19 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                              dtype=np.float64)
             for j in range(self.var_k):
                 y_subset = self.y[d == j]
+                if len(y_subset) == 0:
+                    var_d[j, :] = np.finfo(np.float64).eps
+                    continue
                 mu_j = np.mean(y_subset, 0)
-                precisions_j = np.linalg.inv(np.cov(y_subset.T))
+                precisions_j = np.linalg.inv(
+                    np.atleast_2d(np.cov(y_subset.T))
+                )
                 mu_j = np.atleast_1d(mu_j)
                 precisions_j = np.atleast_2d(precisions_j)
                 # atoms initialization
                 self.var_theta.append([mu_j, self.lambda_prior,
                                        precisions_j, self.nu_prior])
                 # assignations initialization
-                if len(y_subset) == 0:
-                    var_d[j, :] = np.finfo(np.float64).eps
-                    continue
                 log_d_ji = _utils.e_log_norm_wishart(precisions_j,
                                                      self.nu_prior) / 2
                 log_d_ji -= dim / (2 * self.lambda_prior)
