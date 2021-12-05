@@ -8,7 +8,7 @@ from scipy.special import loggamma
 
 
 class PitmanYorProcess(BaseWeight):
-    def __init__(self, pyd=0, alpha=1, truncation_length=100, rng=None):
+    def __init__(self, pyd=0, alpha=1, truncation_length=-1, rng=None):
         super().__init__(rng=rng)
         assert -pyd < alpha, "alpha param must be greater than -pyd"
         self.pyd = pyd
@@ -95,7 +95,8 @@ class PitmanYorProcess(BaseWeight):
             self.random(1)
 
         w_sum = sum(self.w)
-        while w_sum < x and len(self.w) < self.truncation_length:
+        while w_sum < x and (self.truncation_length == -1 or
+                             len(self.w) < self.truncation_length):
             v_to_append = self.rng.beta(
                 a=1 - self.pyd,
                 b=self.alpha + self.get_size() * self.pyd,
