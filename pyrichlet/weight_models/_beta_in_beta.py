@@ -11,17 +11,14 @@ from ..utils.functions import mean_log_beta
 
 
 class BetaInBeta(BaseWeight):
-    def __init__(self, x=0.5, alpha=1, a=1, b=1, p=None, p_method="static",
+    def __init__(self, x=0, alpha=1, a=1, b=1, p=0, p_method="inverse-sampling",
                  p_optim_max_steps=10, rng=None):
         super().__init__(rng=rng)
         self.x = x
         self.a = a
         self.b = b
         self.alpha = alpha
-        if p is None:
-            self.p = self.rng.beta(a=self.a, b=self.b)
-        else:
-            self.p = p
+        self.p = p
 
         self.p_method = p_method
         self.v = np.array([], dtype=np.float64)
