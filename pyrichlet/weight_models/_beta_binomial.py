@@ -7,69 +7,30 @@ class BetaBinomial(BaseWeight):
     def __init__(self, n=0, alpha=1, rng=None):
         super().__init__(rng=rng)
         self.n = n
-        self.theta = alpha
+        self.alpha = alpha
 
         self.v = np.array([], dtype=np.float64)
-        self.bernoullis = np.array([], dtype=np.int)
-
-    def structure_log_likelihood(self, v=None, bernoullis=None, p=None,
-                                 theta=None):
-        if v is None:
-            v = self.v
-        if bernoullis is None:
-            bernoullis = self.bernoullis
-        if p is None:
-            p = self.p
-        if theta is None:
-            theta = self.theta
-        log_likelihood = self.weight_log_likelihood(v=v, theta=theta)
-        log_likelihood += self.persist_log_likelihood(bernoullis=bernoullis,
-                                                      p=p)
-        return log_likelihood
-
-    def weight_log_likelihood(self, v=None, theta=None):
-        if v is None:
-            v = self.v
-        if theta is None:
-            theta = self.theta
-        v = np.unique(v)
-        log_likelihood = np.sum(beta.logpdf(v, a=1, b=theta))
-        return log_likelihood
-
-    def persist_log_likelihood(self, bernoullis=None, p=None):
-        if bernoullis is None:
-            bernoullis = self.bernoullis
-        if p is None:
-            p = self.p
-        log_likelihood = binom.logpmf(k=np.sum(bernoullis),
-                                      n=len(bernoullis),
-                                      p=p)
-        return log_likelihood
+        self.binomials = np.array([], dtype=np.int)
 
     def random(self, size=None):
-        if size is None and len(self.d) == 0:
-            raise ValueError("Weight structure not fitted and `n` not passed.")
-        if size is not None:
+        if size is None:
+            if len(self.d) == 0:
+                raise ValueError(
+                    "Weight structure not fitted and `n` not passed.")
+            size = 1
+        else:
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         if len(self.d) == 0:
-            self.random_p()
-            mask_change = self.rng.binomial(n=1, p=1 - self.p, size=size - 1)
-            mask_change = np.concatenate(([0], np.cumsum(mask_change)))
-            self.v = self.rng.beta(a=1, b=self.theta, size=mask_change[-1] + 1)
-            self.v = self.v[mask_change]
-            self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                         1 - self.v[:-1])))
+            self.complete(size)
         else:
-            self.random_p()
-            self.random_bernoullis()
-            remap = np.cumsum(self.bernoullis)
-            short_d = remap[self.d]
-            a_c = np.bincount(short_d)
+            self._random_binomials()
+            a_c = np.bincount(self.d)
             b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
-
-            self.v = self.rng.beta(a=1 + a_c, b=self.theta + b_c)
-            self.v = self.v[remap]
+            beta_phased = self.binomials[:-1] + self.binomials[1:]
+            a = 1 + a_c + beta_phased
+            b = self.alpha + b_c + 2 * self.n - beta_phased
+            self.v = self.rng.beta(a=a, b=b)
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
             if size is not None:
@@ -79,20 +40,22 @@ class BetaBinomial(BaseWeight):
     def complete(self, size):
         if type(size) is not int:
             raise TypeError("size parameter must be integer or None")
-        if len(self.v) < size:
-            if len(self.v) == 0:
-                self.v = self.rng.beta(a=1, b=self.theta, size=1)
-            mask_change = self.rng.binomial(n=1,
-                                            p=1 - self.p,
-                                            size=size - len(self.v))
-            self.bernoullis = np.concatenate((self.bernoullis, mask_change))
-            mask_change = np.cumsum(mask_change)
-            temp_v = np.concatenate((
-                [self.v[-1]],
-                self.rng.beta(a=1, b=self.theta, size=mask_change[-1])))
-            self.v = np.concatenate((self.v, temp_v[mask_change]))
-            self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                         1 - self.v[:-1])))
+        if len(self.v) == 0:
+            v0 = self.rng.beta(1, self.alpha)
+            self.binomials = self.rng.binomial(self.n, v0, size=1)
+            self.v = self.rng.beta(1 + self.binomials[-1],
+                                   self.alpha + self.n - self.binomials[-1],
+                                   size=1)
+        while len(self.v) < size:
+            self.binomials = np.append(self.binomials,
+                                       self.rng.binomial(self.n, self.v[-1]))
+            self.v = np.append(
+                self.v, self.rng.beta(
+                    1 + self.binomials[-1],
+                    self.alpha + self.n - self.binomials[-1])
+            )
+        self.w = self.v * np.cumprod(np.concatenate(([1],
+                                                     1 - self.v[:-1])))
         return self.w
 
     def tail(self, x):
@@ -104,9 +67,9 @@ class BetaBinomial(BaseWeight):
         w_sum = sum(self.w)
         while w_sum < x:
             bool_new_val = self.rng.binomial(n=1, p=1 - self.p)
-            self.bernoullis = np.concatenate((self.bernoullis, [bool_new_val]))
+            self.binomials = np.concatenate((self.binomials, [bool_new_val]))
             if bool_new_val:
-                v_to_append = self.rng.beta(a=1, b=self.theta, size=1)
+                v_to_append = self.rng.beta(a=1, b=self.alpha, size=1)
                 self.v = np.concatenate((self.v, v_to_append))
             else:
                 self.v = np.concatenate((self.v, [self.v[-1]]))
@@ -114,7 +77,46 @@ class BetaBinomial(BaseWeight):
             w_sum += self.w[-1]
         return self.w
 
-    def random_bernoullis(self):
-        temp_bernoullis = self.rng.binomial(n=1, p=1 - self.p, size=max(self.d))
-        self.bernoullis = np.concatenate(([0], temp_bernoullis))
-        return self.bernoullis
+    def structure_log_likelihood(self, v=None, binomials=None, theta=None):
+        if v is None:
+            v = self.v
+        if binomials is None:
+            binomials = self.binomials
+        if theta is None:
+            theta = self.alpha
+        log_likelihood = self.weight_log_likelihood(v=v, theta=theta,
+                                                    binomials=binomials)
+        return log_likelihood
+
+    def weight_log_likelihood(self, v=None, theta=None, binomials=None):
+        raise NotImplementedError
+
+    def _random_binomials(self):
+        a_c = np.bincount(self.d)
+        b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
+        a_c = np.append(0, a_c)
+        b_c = np.append(0, b_c)
+        beta_rv = self.rng.beta(1 + a_c, self.alpha + b_c)
+        self.binomials = self.rng.binomial(self.n, beta_rv)
+        return self.binomials
+
+    def fit_variational(self, variational_d):
+        raise NotImplementedError
+
+    def variational_mean_log_w_j(self, j):
+        raise NotImplementedError
+
+    def variational_mean_log_p_d__w(self, variational_d=None):
+        raise NotImplementedError
+
+    def variational_mean_log_p_w(self):
+        raise NotImplementedError
+
+    def variational_mean_log_q_w(self):
+        raise NotImplementedError
+
+    def variational_mean_w(self, j):
+        raise NotImplementedError
+
+    def variational_mode_w(self, j):
+        raise NotImplementedError
