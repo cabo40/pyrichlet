@@ -1,12 +1,10 @@
 from ._base import BaseGaussianMixture
 from ..weight_models import BetaBernoulli
 
-import numpy as np
-
 
 class BetaBernoulliMixture(BaseGaussianMixture):
-    def __init__(self, *, p=0.5, theta=1, rng=None, **kwargs):
-        weight_model = BetaBernoulli(p=p, alpha=theta, rng=rng)
+    def __init__(self, *, p=1, alpha=1, rng=None, **kwargs):
+        weight_model = BetaBernoulli(p=p, alpha=alpha, rng=rng)
         super().__init__(weight_model=weight_model, rng=rng, **kwargs)
 
     def _get_run_params(self):
