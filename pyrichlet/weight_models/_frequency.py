@@ -13,7 +13,9 @@ class FrequencyWeighting(BaseWeight):
         if len(self.d) == 0:
             self.w = np.repeat(1 / self.n, self.n)
         else:
-            self.w = self.d / self.d.sum()
+            self.w = np.bincount(self.d)
+            self.w = self.w / self.w.sum()
+        return self.w
 
     def complete(self, size):
         return self.random(size)
