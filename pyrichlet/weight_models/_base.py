@@ -69,7 +69,7 @@ class BaseWeight(ABC):
             raise ValueError("Tail parameter not in range [0,1)")
         if len(self.w) == 0:
             self.random(1)
-        while sum(self.w) < x:
+        while self.w.sum() < x:
             self.complete(len(self.w) + 1)
         return self.w
 
