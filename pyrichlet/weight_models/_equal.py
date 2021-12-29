@@ -10,7 +10,8 @@ class EqualWeighting(BaseWeight):
         self.n = n
 
     def random(self, size=None):
-        return np.repeat(1 / self.n, self.n)
+        self.w = np.repeat(1 / self.n, self.n)
+        return self.w
 
     def complete(self, size):
         return self.random(size)
