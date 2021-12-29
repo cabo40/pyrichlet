@@ -14,11 +14,3 @@ class BetaInBetaMixture(BaseGaussianMixture):
                          nu_prior=nu_prior, total_iter=total_iter,
                          burn_in=burn_in, subsample_steps=subsample_steps,
                          rng=rng)
-
-    def _get_run_params(self):
-        return {"w": self.weight_model.get_weights(),
-                "mu": self.mu,
-                "sigma": self.sigma,
-                "u": self.u,
-                "d": self.d,
-                "p": self.weight_model.get_p()}

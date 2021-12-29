@@ -58,39 +58,6 @@ class BetaBinomial(BaseWeight):
                                                      1 - self.v[:-1])))
         return self.w
 
-    def tail(self, x):
-        if x >= 1 or x < 0:
-            raise ValueError("Tail parameter not in range [0,1)")
-        if len(self.w) == 0:
-            self.random(1)
-
-        w_sum = sum(self.w)
-        while w_sum < x:
-            bool_new_val = self.rng.binomial(n=1, p=1 - self.p)
-            self.binomials = np.concatenate((self.binomials, [bool_new_val]))
-            if bool_new_val:
-                v_to_append = self.rng.beta(a=1, b=self.alpha, size=1)
-                self.v = np.concatenate((self.v, v_to_append))
-            else:
-                self.v = np.concatenate((self.v, [self.v[-1]]))
-            self.w = np.concatenate((self.w, [(1 - sum(self.w)) * self.v[-1]]))
-            w_sum += self.w[-1]
-        return self.w
-
-    def structure_log_likelihood(self, v=None, binomials=None, theta=None):
-        if v is None:
-            v = self.v
-        if binomials is None:
-            binomials = self.binomials
-        if theta is None:
-            theta = self.alpha
-        log_likelihood = self.weight_log_likelihood(v=v, theta=theta,
-                                                    binomials=binomials)
-        return log_likelihood
-
-    def weight_log_likelihood(self, v=None, theta=None, binomials=None):
-        raise NotImplementedError
-
     def _random_binomials(self):
         a_c = np.bincount(self.d)
         b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
@@ -99,24 +66,3 @@ class BetaBinomial(BaseWeight):
         beta_rv = self.rng.beta(1 + a_c, self.alpha + b_c)
         self.binomials = self.rng.binomial(self.n, beta_rv)
         return self.binomials
-
-    def fit_variational(self, variational_d):
-        raise NotImplementedError
-
-    def variational_mean_log_w_j(self, j):
-        raise NotImplementedError
-
-    def variational_mean_log_p_d__w(self, variational_d=None):
-        raise NotImplementedError
-
-    def variational_mean_log_p_w(self):
-        raise NotImplementedError
-
-    def variational_mean_log_q_w(self):
-        raise NotImplementedError
-
-    def variational_mean_w(self, j):
-        raise NotImplementedError
-
-    def variational_mode_w(self, j):
-        raise NotImplementedError

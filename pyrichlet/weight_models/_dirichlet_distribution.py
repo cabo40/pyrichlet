@@ -17,23 +17,22 @@ class DirichletDistribution(BaseWeight):
             self.alpha = np.array(alpha, dtype=np.float64)
         elif type(alpha) in (int, float):
             self.alpha = np.array([alpha] * self.n, dtype=np.float64)
-        self.v = np.array([], dtype=np.float64)
 
-    def structure_log_likelihood(self, v=None, alpha=None):
-        if v is None:
-            v = self.v
+    def structure_log_likelihood(self, w=None, alpha=None):
+        if w is None:
+            w = self.w
         if alpha is None:
             alpha = self.alpha
-        return self.weight_log_likelihood(v=v, theta=alpha)
+        return self.weight_log_likelihood(w=w, theta=alpha)
 
-    def weight_log_likelihood(self, v=None, theta=None):
-        if v is None:
-            v = self.v
+    def weight_log_likelihood(self, w=None, theta=None):
+        if w is None:
+            w = self.w
         if theta is None:
             theta = self.alpha
-        if len(v) == 0:
+        if len(w) == 0:
             return 0
-        return np.sum(dirichlet.logpdf(v, theta))
+        return np.sum(dirichlet.logpdf(w, theta))
 
     def random(self, size=None):
         if len(self.d) > 0:
@@ -44,21 +43,14 @@ class DirichletDistribution(BaseWeight):
             else:
                 a_c = np.bincount(self.d)
                 a_c.resize(len(self.alpha), refcheck=False)
-                self.v = self.rng.dirichlet(self.alpha + a_c)
+                self.w = self.rng.dirichlet(self.alpha + a_c)
         else:
-            self.v = self.rng.dirichlet(self.alpha)
-        self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                     1 - self.v[:-1])))
+            self.w = self.rng.dirichlet(self.alpha)
         return self.w
 
     def complete(self, size=None):
         if len(self.w) == 0:
             self.random(None)
-        return self.w
-
-    def tail(self, x=None):
-        if len(self.w) == 0:
-            self.random()
         return self.w
 
     def fit_variational(self, variational_d):

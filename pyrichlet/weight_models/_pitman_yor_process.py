@@ -3,7 +3,6 @@ from ..exceptions import NotFittedError
 from ..utils.functions import mean_log_beta
 
 import numpy as np
-from scipy.stats import beta
 from scipy.special import loggamma
 
 
@@ -15,30 +14,6 @@ class PitmanYorProcess(BaseWeight):
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
         self.truncation_length = truncation_length
-
-    def structure_log_likelihood(self, v=None, pyd=None, alpha=None):
-        if v is None:
-            v = self.v
-        if pyd is None:
-            pyd = self.pyd
-        if alpha is None:
-            alpha = self.alpha
-        return self.weight_log_likelihood(v=v, pyd=pyd, alpha=alpha)
-
-    def weight_log_likelihood(self, v=None, pyd=None, alpha=None):
-        if v is None:
-            v = self.v
-        if pyd is None:
-            pyd = self.pyd
-        if alpha is None:
-            alpha = self.alpha
-        n = len(v)
-        if n == 0:
-            return 0
-        pitman_yor_bias = np.arange(n)
-        return np.sum(beta.logpdf(v,
-                                  a=1 - pyd,
-                                  b=alpha + pitman_yor_bias * pyd))
 
     def random(self, size=None):
         if size is None and len(self.d) == 0:
@@ -86,24 +61,6 @@ class PitmanYorProcess(BaseWeight):
             )
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
-        return self.w
-
-    def tail(self, x):
-        if x >= 1 or x < 0:
-            raise ValueError("Tail parameter not in range [0,1)")
-        if len(self.w) == 0:
-            self.random(1)
-
-        w_sum = sum(self.w)
-        while w_sum < x and (self.truncation_length == -1 or
-                             len(self.w) < self.truncation_length):
-            v_to_append = self.rng.beta(
-                a=1 - self.pyd,
-                b=self.alpha + self.get_size() * self.pyd,
-                size=1)
-            self.v = np.concatenate((self.v, v_to_append))
-            self.w = np.concatenate((self.w, [(1 - sum(self.w)) * self.v[-1]]))
-            w_sum += self.w[-1]
         return self.w
 
     def fit_variational(self, variational_d):

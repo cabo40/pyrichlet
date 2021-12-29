@@ -9,31 +9,14 @@ class FrequencyWeighting(BaseWeight):
         super().__init__(rng=rng)
         self.n = n
 
-    def structure_log_likelihood(self):
-        return 0
-
-    def weight_log_likelihood(self, w=None):
-        return 0
-
     def random(self, size=None):
         if len(self.d) == 0:
-            if size is None:
-                return np.repeat(1 / self.n, self.n)
-            else:
-                return np.repeat(1 / self.n, self.n)[:size]
+            self.w = np.repeat(1 / self.n, self.n)
         else:
-            if size is None:
-                return self.d / self.d.sum()
-            else:
-                return (self.d / self.d.sum())[:size]
+            self.w = self.d / self.d.sum()
 
     def complete(self, size):
         return self.random(size)
-
-    def tail(self, x):
-        if x >= 1 or x < 0:
-            raise ValueError("Tail parameter not in range [0,1)")
-        return self.random()
 
     def fit_variational(self, variational_d: np.ndarray):
         self.variational_d = variational_d

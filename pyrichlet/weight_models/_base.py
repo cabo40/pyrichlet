@@ -1,9 +1,9 @@
 """Base class for weighting structure models."""
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 import numpy as np
 
 
-class BaseWeight(metaclass=ABCMeta):
+class BaseWeight(ABC):
     """Base class for weighting structure models.
 
     This abstract class specifies an interface for all weighting structure
@@ -24,16 +24,6 @@ class BaseWeight(metaclass=ABCMeta):
         self.variational_d = None
         self.variational_k = None
 
-    def fit(self, d):
-        """Fit the weighting structure to a vector of assignments
-
-        This method fits the parameters of the weighting model given the
-        internal truncated weighting structure `self.w`. Calls to any of the
-        methods: `random`, `tail`, `complete`; after calling this method
-        results in random draws from the posterior distribution.
-        """
-        self.d = np.array(d)
-
     @abstractmethod
     def random(self, size=None):
         """Do a random draw of the truncated weighting structure up to `n` obs.
@@ -42,16 +32,6 @@ class BaseWeight(metaclass=ABCMeta):
         distribution (or from the prior distribution if nothing has been
         fitted) and updates the internal truncated weighting structure
         `self.w`.
-        """
-        pass
-
-    @abstractmethod
-    def tail(self, x):
-        """Return an array of weights such that the sum is greater than `x`
-
-        This method appends weights to the truncated weighting structure
-        `self.w` until the sum of its elements is greater than the input `x`
-        and then returns `self.w`.
         """
         pass
 
@@ -68,17 +48,32 @@ class BaseWeight(metaclass=ABCMeta):
         """
         pass
 
-    @abstractmethod
-    def structure_log_likelihood(self):
-        """Return the log-likelihood of the complete weighting structure"""
-        pass
+    def fit(self, d):
+        """Fit the weighting structure to a vector of assignments
 
-    @abstractmethod
-    def weight_log_likelihood(self, w=None):
-        """Return the log-likelihood of the weights conditional to params"""
-        pass
+        This method fits the parameters of the weighting model given the
+        internal truncated weighting structure `self.w`. Calls to any of the
+        methods: `random`, `tail`, `complete`; after calling this method
+        results in random draws from the posterior distribution.
+        """
+        self.d = np.array(d)
 
-    def assign_log_likelihood(self, d=None):
+    def tail(self, x):
+        """Return an array of weights such that the sum is greater than `x`
+
+        This method appends weights to the truncated weighting structure
+        `self.w` until the sum of its elements is greater than the input `x`
+        and then returns `self.w`.
+        """
+        if x >= 1 or x < 0:
+            raise ValueError("Tail parameter not in range [0,1)")
+        if len(self.w) == 0:
+            self.random(1)
+        while sum(self.w) < x:
+            self.complete(len(self.w) + 1)
+        return self.w
+
+    def assignation_log_likelihood(self, d=None):
         """Returns the log-likelihood of an assignment `d` given the weights"""
         if d is None:
             d = self.d
@@ -114,7 +109,6 @@ class BaseWeight(metaclass=ABCMeta):
         )
         return np.sum(inverse_sampling, axis=1)
 
-    @abstractmethod
     def fit_variational(self, variational_d):
         """Fits the variational distribution q
 
@@ -126,7 +120,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def variational_mean_log_w_j(self, j):
         """Returns the mean of the logarithm of w_j
 
@@ -135,7 +128,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def variational_mean_log_p_d__w(self, variational_d=None):
         """Returns the mean of log p(d|w)
 
@@ -145,7 +137,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def variational_mean_log_p_w(self):
         """Returns the mean of log p(d|w)
 
@@ -155,7 +146,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def variational_mean_log_q_w(self):
         """Returns the mean of log p(d|w)
 
@@ -165,7 +155,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def variational_mean_w(self, j):
         """Returns the mean of w_j
 
@@ -174,25 +163,6 @@ class BaseWeight(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def variational_mode_w(self, j):
-        """Returns the mean of w_j
-
-        This method returns the expected value of the j-th weighting factor
-        under the variational distribution q.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def variational_mean_w(self, j):
-        """Returns the mean of w_j
-
-        This method returns the expected value of the j-th weighting factor
-        under the variational distribution q.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def variational_mode_w(self, j):
         """Returns the mean of w_j
 

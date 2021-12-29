@@ -101,7 +101,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.show_progress = show_progress
 
     def fit_gibbs(self, y, max_groups=None, warm_start=False,
-                  show_progress=None):
+                  show_progress=None, method="random"):
         """
         Fit posterior distribution using Gibbs sampling.
 
@@ -126,10 +126,16 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         show_progress: bool, default=None
             If show_progress is True, a progress bar from the tqdm library is
             displayed.
+
+        method: str, default="random"
+            "random": does a random initialization based on the prior models
+            "kmeans": does a kmeans initialization
+            "variational": fits the variational distribution an uses the MAP
+                parameters as initialization
         """
-        self._initialize_common_method_params(y)
+        self._initialize_common_params(y)
         if not warm_start:
-            self._initialize_gibbs_params(max_groups=max_groups)
+            self._initialize_gibbs_params(max_groups=max_groups, method=method)
         if show_progress is not None:
             self.show_progress = show_progress
         # Iterate the Gibbs steps with or without tqdm
@@ -159,7 +165,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                         method='kmeans'):
         if show_progress is not None:
             self.show_progress = show_progress
-        self._initialize_common_method_params(y)
+        self._initialize_common_params(y)
         if not warm_start:
             if n_groups is None:
                 if hasattr(self, 'n'):
@@ -330,7 +336,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 return self.var_d.argmax(0)
             else:
                 d = self.var_d.argmax(0)
-                return d, self.var_d[d, range(len(d))]
+                return d, 1-self.var_d[d, range(len(d))]
         if isinstance(y, pd.DataFrame):
             _y = y.to_numpy()
         elif isinstance(y, list):
@@ -370,7 +376,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def get_sim_params(self):
         return self.sim_params
 
-    def _initialize_common_method_params(self, y):
+    def _initialize_common_params(self, y):
         """
         Initialize the prior variables if not given
         """
@@ -395,7 +401,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         if self.nu_prior is None:
             self.nu_prior = self.y.shape[1]
 
-    def _initialize_gibbs_params(self, max_groups=None):
+    def _initialize_gibbs_params(self, max_groups=None, method="random"):
         """
         Initialize the Gibbs sampler latent variables
 
@@ -407,6 +413,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         max_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
             the  number of groups drawn from the weight model is not caped.
+        method: str, default="random"
+            "kmeans": does a kmeans initialization
+            "random": does a random initialization based on the prior models
+            "variational": fits the variational distribution an uses the MAP
+                parameters as initialization
         """
         self.mu = np.empty((0, *self.mu_prior.shape))
         self.sigma = np.empty((0, *self.psi_prior.shape))
@@ -421,7 +432,25 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.weight_model.tail(1 - min(self.u))
         else:
             self.weight_model.complete(max_groups)
-        self.d = self.weight_model.random_assignment(len(self.y))
+
+        if method == "kmeans":
+            from sklearn.cluster import KMeans
+            # TODO wait for sklearn to implement Generator as random_state
+            # input https://github.com/scikit-learn/scikit-learn/issues/16988
+            km = KMeans(
+                n_clusters=self.var_k,
+                random_state=np.random.RandomState(self.rng.bit_generator)
+            )
+            self.d = km.fit_predict(self.y)
+        elif method == "random":
+            self.d = self.weight_model.random_assignment(len(self.y))
+        elif method == "variational":
+            self.fit_variational(self.y,
+                                 n_groups=self.weight_model.get_size())
+            self.d = self.var_map_cluster()
+        else:
+            raise AttributeError("method param must be one of 'kmeans', "
+                                 "'random', 'variational'")
         self._complete_atoms()
 
     def _initialize_variational_params(self, var_k, method="kmeans"):
@@ -521,7 +550,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.total_saved_steps += 1
 
     def _update_map_params(self):
-        run_log_likelihood = self._full_log_likelihood()
+        run_log_likelihood = self._y_log_likelihood()
         if self.map_log_likelihood < run_log_likelihood:
             self.map_log_likelihood = run_log_likelihood
             self.map_sim_params = self._get_run_params()
@@ -608,18 +637,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                                          self.mu[di],
                                                          self.sigma[di],
                                                          1))
-        return ret
-
-    def _mixture_log_likelihood(self):
-        # TODO should return log likelihood of atoms
-        ret_log_likelihood = self._y_log_likelihood()
-        # Bellow is commented out since d's distribution is discrete uniform
-        # ret_log_likelihood += np.sum(self._d_log_likelihood_vector()[self.d])
-        return ret_log_likelihood
-
-    def _full_log_likelihood(self):
-        ret = self._mixture_log_likelihood()
-        ret += self.weight_model.structure_log_likelihood()
         return ret
 
     def _maximize_variational(self):
