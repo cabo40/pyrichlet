@@ -1,4 +1,0 @@
-My Title
-*********
-
-.. Hola mundo

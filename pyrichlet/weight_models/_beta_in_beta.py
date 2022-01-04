@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats import beta
 from scipy.optimize import minimize, brentq
 from scipy.integrate import quad
 

@@ -1,17 +1,18 @@
-.. Pyrichlet documentation master file, created by
-   sphinx-quickstart on Sat Jan  9 10:05:32 2021.
+.. pyrichlet documentation master file, created by
+   sphinx-quickstart on Wed Dec 29 15:51:40 2021.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Pyrichlet's documentation
-=========================
+Welcome to pyrichlet's documentation!
+=====================================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   install/install
-   pyrichlet
+   installation
+   usage
+   api
 
 Indices and tables
 ==================

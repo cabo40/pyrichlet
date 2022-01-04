@@ -4,13 +4,15 @@
 # License: Apache License 2.0
 
 import setuptools
+import versioneer
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="pyrichlet",
-    version="0.0.2",
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
     description="A package for density estimation and clustering using "

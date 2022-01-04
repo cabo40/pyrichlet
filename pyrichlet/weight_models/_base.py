@@ -32,6 +32,16 @@ class BaseWeight(ABC):
         distribution (or from the prior distribution if nothing has been
         fitted) and updates the internal truncated weighting structure
         `self.w`.
+
+        Parameters
+        ----------
+        size : int
+            The desired size of the returned vector of weights
+
+        Returns
+        -------
+        np.array
+            Array of the weighted structure.
         """
         pass
 
@@ -45,6 +55,16 @@ class BaseWeight(ABC):
         the truncated weighting structure. No truncation is induced in case
         `size` is less than `len(self.w)` and the full length of `self.w` is
         returned.
+
+        Parameters
+        ----------
+        size : int
+            The desired size of the returned vector of weights
+
+        Returns
+        -------
+        np.array
+            Array of the weighted structure.
         """
         pass
 
@@ -52,9 +72,14 @@ class BaseWeight(ABC):
         """Fit the weighting structure to a vector of assignments
 
         This method fits the parameters of the weighting model given the
-        internal truncated weighting structure `self.w`. Calls to any of the
-        methods: `random`, `tail`, `complete`; after calling this method
-        results in random draws from the posterior distribution.
+        internal truncated weighting structure `self.w`. Any call to the
+        methods `random`, `tail` or `complete` after calling this method
+        results in a random draw from the posterior distribution.
+
+        Parameters
+        ----------
+        d : array[int], np.array
+            An array of integers representing the assigned group
         """
         self.d = np.array(d)
 
@@ -64,6 +89,17 @@ class BaseWeight(ABC):
         This method appends weights to the truncated weighting structure
         `self.w` until the sum of its elements is greater than the input `x`
         and then returns `self.w`.
+
+        Parameters
+        ----------
+        x : float
+            A float in the range $[0,1)$ for which the sum of weights must be
+            greater.
+
+        Returns
+        -------
+        np.array
+            Array of the completed weighted structure
         """
         if x >= 1 or x < 0:
             raise ValueError("Tail parameter not in range [0,1)")

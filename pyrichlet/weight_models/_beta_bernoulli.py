@@ -1,6 +1,5 @@
 from ._base import BaseWeight
 import numpy as np
-from scipy.stats import beta, binom
 from scipy.special import beta as betaf
 
 

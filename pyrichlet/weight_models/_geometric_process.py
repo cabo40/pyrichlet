@@ -3,7 +3,6 @@ from ..exceptions import NotFittedError
 from ..utils.functions import mean_log_beta
 
 import numpy as np
-from scipy.stats import beta
 from scipy.special import loggamma
 
 
