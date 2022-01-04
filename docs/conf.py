@@ -13,7 +13,7 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath("")[:-4])
+sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
