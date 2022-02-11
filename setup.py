@@ -16,7 +16,7 @@ setuptools.setup(
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
     description="A package for density estimation and clustering using "
-                "infinite gaussian mixtures with stick-breaking weighting "
+                "infinite Gaussian mixtures with stick-breaking weighting "
                 "structures",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -41,6 +41,7 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",

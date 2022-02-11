@@ -63,3 +63,10 @@ or for cluster estimation
     mm.var_map_cluster()
     mm.gibbs_map_cluster()
     mm.gibbs_eap_spectral_consensus_cluster()
+
+to show the progress of the fitting method, the parameter `show_progress` can
+be set
+
+.. code:: python
+
+    mm.fit_gibbs(y, show_progress=True)

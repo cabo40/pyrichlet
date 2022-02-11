@@ -20,6 +20,9 @@ pip install pyrichlet==0.0.3
 
 # Usage
 
+This is a quick guide. For a more detailed usage see
+https://pyrichlet.readthedocs.io/en/latest/index.html.
+
 The weighting structure models that this package implements are
 
 - `DirichletDistribution`
@@ -45,7 +48,7 @@ wm.random(10)
 wm.random_assignment(100)
 ```
 
-For each weighting structure there is an associated gaussian mixture model, formerly
+For each weighting structure there is an associated Gaussian mixture model, formerly
 
 - `DirichletDistributionMixture`
 - `DirichletProcessMixture`
