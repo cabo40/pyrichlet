@@ -761,7 +761,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         for vd_j in self.var_d:
             n_j = vd_j.sum()
             x_bar_j = (vd_j / n_j) @ self.y
-            ns_j = (vd_j * (self.y - x_bar_j).T) @ (self.y - x_bar_j)
+            ns_j = np.einsum('i,ij,ik->jk',
+                             vd_j, (self.y - x_bar_j), (self.y - x_bar_j)
+                             ) / n_j
             v_lambda_j = self.lambda_prior + n_j
             v_scale_j = self.nu_prior + n_j
             v_mu_j = (self.lambda_prior * self.mu_prior +
@@ -782,11 +784,12 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
             log_d_ji = self.weight_model.variational_mean_log_w_j(j)
             log_d_ji += _utils.e_log_norm_wishart(v_precision_j, v_scale_j) / 2
-            log_d_ji -= dim / (2 * v_lambda_j)
-            log_d_ji -= (v_scale_j / 2 *
+            log_d_ji -= dim * np.log(2 * np.pi) / 2
+            log_d_ji -= dim / v_lambda_j / 2
+            log_d_ji -= (v_scale_j *
                          ((self.y - v_mu_j).T * (
                                  v_precision_j @ (self.y - v_mu_j).T)).sum(0)
-                         )
+                         ) / 2
             var_d[j, :] = log_d_ji
         var_d -= var_d.max(0)
         var_d = np.exp(var_d)
