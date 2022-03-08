@@ -606,37 +606,13 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 random_state=np.random.RandomState(self.rng.bit_generator)
             )
             d = km.fit_predict(self.y)
-            dim = self.y.shape[1]
             var_d = np.zeros((self.var_k, self.y.shape[0]),
                              dtype=np.float64)
-            for j in range(self.var_k):
-                y_subset = self.y[d == j]
-                if len(y_subset) == 0:
-                    var_d[j, :] = np.finfo(np.float64).eps
-                    continue
-                mu_j = np.mean(y_subset, 0)
-                precisions_j = np.linalg.inv(
-                    np.atleast_2d(np.cov(y_subset.T))
-                )
-                mu_j = np.atleast_1d(mu_j)
-                precisions_j = np.atleast_2d(precisions_j)
-                # atoms initialization
-                self.var_theta.append([mu_j, self.lambda_prior,
-                                       precisions_j, self.nu_prior])
-                # assignations initialization
-                log_d_ji = _utils.e_log_norm_wishart(precisions_j,
-                                                     self.nu_prior) / 2
-                log_d_ji -= dim / (2 * self.lambda_prior)
-                log_d_ji -= (self.nu_prior / 2 *
-                             ((self.y - mu_j).T * (precisions_j @ (
-                                     self.y - mu_j).T)).sum(0)
-                             )
-                var_d[j, :] = log_d_ji
-            var_d -= var_d.max(0)
-            var_d = np.exp(var_d)
-            var_d += np.finfo(np.float64).eps
-            var_d /= var_d.sum(0)
+            var_d[d, range(len(d))] = 1
             self.var_d = var_d
+            self.weight_model.fit_variational(np.empty(shape=(self.var_k, 0)))
+            self._update_var_theta()
+            self._update_var_d()
         elif method == "random":
             for _ in range(self.var_k):
                 mu_j, temp_psi = _utils.random_normal_invw(

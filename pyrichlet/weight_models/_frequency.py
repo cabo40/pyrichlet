@@ -23,13 +23,17 @@ class FrequencyWeighting(BaseWeight):
     def fit_variational(self, variational_d: np.ndarray):
         self.variational_d = variational_d
         self.variational_k = variational_d.shape[1]
+        if self.variational_k == 0:
+            self.variational_k = self.n
 
     def variational_mean_log_w_j(self, j):
         if self.variational_d is None:
             raise NotFittedError
         if j >= self.variational_k:
             return -np.inf
-        return self.variational_d.sum(1)[j] / self.variational_d.sum()
+        if self.variational_d.shape[1]:
+            return self.variational_d.sum(1)[j] / self.variational_d.sum()
+        return np.log(1 / self.variational_k)
 
     def variational_mean_log_p_d__w(self, variational_d=None):
         if variational_d is None:

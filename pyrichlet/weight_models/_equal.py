@@ -18,36 +18,28 @@ class EqualWeighting(BaseWeight):
 
     def fit_variational(self, variational_d: np.ndarray):
         self.variational_d = variational_d
-        self.n = self.variational_d.shape[1]
+        self.n = self.variational_d.shape[0]
+        self.variational_k = self.n
 
     def variational_mean_log_w_j(self, j):
-        if self.variational_d is None:
-            raise NotFittedError
-        return 0
+        return np.log(1 / self.n) * (j < self.n)
 
     def variational_mean_log_p_d__w(self, variational_d=None):
-        if variational_d is None:
+        _variational_d = variational_d
+        if _variational_d is None:
             _variational_d = self.variational_d
             if _variational_d is None:
                 raise NotFittedError
-        return 0
+        return _variational_d.shape[1] * np.log(self.n)
 
     def variational_mean_log_p_w(self):
-        if self.variational_d is None:
-            raise NotFittedError
         return 0
 
     def variational_mean_log_q_w(self):
-        if self.variational_d is None:
-            raise NotFittedError
         return 0
 
     def variational_mean_w(self, j):
-        if j >= self.variational_k:
-            return 0
-        return 1 / self.n
+        return 1 / self.n * (j < self.n)
 
     def variational_mode_w(self, j):
-        if j >= self.variational_k:
-            return 0
-        return 1 / self.n
+        return 1 / self.n * (j < self.n)

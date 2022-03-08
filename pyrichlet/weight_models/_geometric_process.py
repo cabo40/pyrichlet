@@ -54,7 +54,8 @@ class GeometricProcess(BaseWeight):
         self.variational_d = variational_d
         self.variational_k = len(self.variational_d)
         self.variational_params = np.empty(2, dtype=np.float64)
-        self.variational_params[0] = self.a + len(self.variational_d[0]) - 1
+        self.variational_params[0] = self.a + max(len(self.variational_d[0]),
+                                                  1) - 1
         self.variational_params[1] = (
                 self.b + (self.variational_d[1:].T *
                           range(1, self.variational_k)).sum()
