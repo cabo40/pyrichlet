@@ -96,6 +96,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         # Fitting flags
         self.gibbs_fitted = False
         self.var_fitted = False
+        self.var_converged = False
 
         self.show_progress = show_progress
 
@@ -205,11 +206,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.show_progress = show_progress
         self._initialize_common_params(y)
         if not warm_start:
-            if n_groups is None:
-                if hasattr(self, 'n'):
-                    var_k = self.n
-                else:
-                    raise AttributeError("n_groups must be a positive integer")
+            if hasattr(self, 'n') and n_groups is None:
+                var_k = self.n
+            elif n_groups is None:
+                raise AttributeError("n_groups must be a positive integer")
             else:
                 var_k = n_groups
             self._initialize_variational_params(var_k=var_k, method=method)
@@ -234,6 +234,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 elbo_diff = abs(prev_elbo - elbo)
                 iterations += 1
         self.var_fitted = True
+        if iterations < max_iter:
+            self.var_converged = True
 
     def gibbs_eap_density(self, y=None, periods=None):
         """
