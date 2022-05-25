@@ -27,6 +27,7 @@ class BetaInBeta(BaseWeight):
         if size is not None:
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
+        self.v = self.v[:0]
         if len(self.d) == 0:
             self.complete(size)
         else:

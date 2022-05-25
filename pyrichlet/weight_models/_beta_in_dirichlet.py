@@ -17,20 +17,14 @@ class BetaInDirichlet(BaseWeight):
         if size is not None:
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
+        self.v = self.v[:0]
         if len(self.d) == 0:
             self.complete(size)
         else:
             max_d = self.d.max()
             c = defaultdict(lambda: 0)
             c_prime = defaultdict(lambda: 1)
-            while len(self.v) < max_d:
-                p = np.array([1] * len(self.v) + [self.a], dtype=np.float64)
-                p /= p.sum()
-                j = self.rng.choice(range(len(self.v) + 1), p=p)
-                if j <= len(self.v):
-                    self.v = np.append(self.v, self.v[j])
-                else:
-                    self.v = np.append(self.v, self.rng.beta(1, self.alpha))
+            self.complete(max_d)
             if u is None:
                 self.w = self.v * np.cumprod(np.concatenate(([1],
                                                              1 - self.v[:-1])))
