@@ -10,6 +10,8 @@ class BetaInDirichlet(BaseWeight):
         self.a = a
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
+        self._v_base = np.array([], dtype=np.float64)
+        self._d_base = []
 
     def random(self, size=None, u=None):
         if size is None and len(self.d) == 0:
@@ -18,33 +20,36 @@ class BetaInDirichlet(BaseWeight):
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         self.v = self.v[:0]
+        self._v_base = self._v_base[:0]
+        self._d_base = self._d_base[:0]
         if len(self.d) == 0:
             self.complete(size)
         else:
             max_d = self.d.max()
             c = defaultdict(lambda: 0)
             c_prime = defaultdict(lambda: 1)
-            self.complete(max_d)
+            self.complete(max_d + 1)
+            v_conj_prod = np.concatenate([[1], np.cumprod(1 - self.v[:-1])])
             if u is None:
-                self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                             1 - self.v[:-1])))
                 u = self.rng.uniform(0, self.w[self.d])
+            pre_c = u / v_conj_prod[self.d]
+            for j in np.unique(self.d):
+                c[j] = max(0, np.max(pre_c[self.d == j]))
             for k, dk in enumerate(self.d):
-                c_j = u[k]
-                if dk > 0:
-                    c_j /= np.prod(1 - self.v[:dk])
-                c[dk] = max(c[dk], c_j)
                 for j in range(dk):
-                    c_j_prime = self.v[dk] * np.prod(1 - self.v[:dk])
-                    c_j_prime = 1 - u[k] * (1 - self.v[j]) / c_j_prime
+                    c_j_prime = 1 - u[k] * (1 - self.v[j]) / self.w[dk]
                     c_prime[j] = min(c_prime[j], c_j_prime)
-            for j in range(len(self.v)):
-                mask = np.full_like(self.v, True, dtype=np.bool)
-                mask[j] = False
-                mask = mask & (self.v > c[j]) & (self.v < c_prime[j])
-                temp_v = self.v[mask]
-                len_temp_v = len(temp_v)
-                if len_temp_v == 0 and self.a == 0:
+            len_v = len(self.v)
+            if self.a == 0:
+                self._v_base[0] = self.rng.beta(1 + len(self.d),
+                                                self.alpha + self.d.sum())
+                self.v = np.repeat(self._v_base[0], len_v)
+                len_v = 0
+            for j in range(len_v):
+                mask = (self._v_base > c[j]) & (self._v_base < c_prime[j])
+                temp_v_base = self._v_base[mask]
+                len_temp_v = len(temp_v_base)
+                if len_temp_v == 0:
                     k = 0
                 else:
                     p = np.array([1] * len_temp_v + [self.a],
@@ -52,28 +57,34 @@ class BetaInDirichlet(BaseWeight):
                     p /= p.sum()
                     k = self.rng.choice(range(len_temp_v + 1), p=p)
                 if k < len_temp_v:
-                    self.v[j] = temp_v[k]
+                    self.v[j] = temp_v_base[k]
                 else:
                     trunc_beta = self.rng.uniform(
                         1 - np.power(1 - c[j], self.alpha),
                         1 - np.power(1 - c_prime[j], self.alpha)
                     )
                     trunc_beta = 1 - np.power(1 - trunc_beta, 1 / self.alpha)
+                    self._v_base = np.append(self._v_base, trunc_beta)
+                    self._d_base += [1]
                     self.v[j] = trunc_beta
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
         return self.w
 
     def complete(self, size):
-        if len(self.v) == 0:
-            self.v = self.rng.beta(1, self.alpha, size=1)
+        if len(self._v_base) == 0:
+            self._v_base = self.rng.beta(1, self.alpha, size=1)
+            self._d_base += [1]
         while len(self.v) < size:
-            p = np.array([1] * len(self.v) + [self.a], dtype=np.float64)
+            p = np.array(self._d_base + [self.a], dtype=np.float64)
             p /= p.sum()
-            j = self.rng.choice(range(len(self.v) + 1), p=p)
-            if j <= len(self.v):
-                self.v = np.append(self.v, self.v[j])
+            jj = self.rng.choice(range(len(self._v_base) + 1), p=p)
+            if jj <= len(self._v_base):
+                self.v = np.append(self.v, self._v_base[jj])
             else:
-                self.v = np.append(self.v, self.rng.beta(1, self.alpha))
+                new_v_base = self.rng.beta(1, self.alpha)
+                self._v_base = np.append(self._v_base, new_v_base)
+                self._d_base += [1]
+                self.v = np.append(self.v, new_v_base)
         self.w = self.v * np.cumprod(np.concatenate(([1],
                                                      1 - self.v[:-1])))
