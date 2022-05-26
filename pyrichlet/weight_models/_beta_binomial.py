@@ -9,7 +9,7 @@ class BetaBinomial(BaseWeight):
         self.alpha = alpha
 
         self.v = np.array([], dtype=np.float64)
-        self.binomials = np.array([], dtype=np.int)
+        self.binomials = np.array([], dtype=int)
 
     def random(self, size=None):
         if size is None:
@@ -17,9 +17,6 @@ class BetaBinomial(BaseWeight):
                 raise ValueError(
                     "Weight structure not fitted and `n` not passed.")
             size = 1
-        else:
-            if type(size) is not int:
-                raise TypeError("size parameter must be integer or None")
         self.v = self.v[:0]
         if len(self.d) == 0:
             self.complete(size)

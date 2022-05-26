@@ -38,8 +38,6 @@ class DirichletProcess(BaseWeight):
         return self.w
 
     def complete(self, size):
-        if type(size) is not int:
-            raise TypeError("size parameter must be integer or None")
         if len(self.v) < size:
             self.v = np.concatenate(
                 (self.v,

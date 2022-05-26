@@ -24,9 +24,6 @@ class BetaInBeta(BaseWeight):
     def random(self, size=None):
         if size is None and len(self.d) == 0:
             raise ValueError("Weight structure not fitted and `n` not passed.")
-        if size is not None:
-            if type(size) is not int:
-                raise TypeError("size parameter must be integer or None")
         self.v = self.v[:0]
         if len(self.d) == 0:
             self.complete(size)
