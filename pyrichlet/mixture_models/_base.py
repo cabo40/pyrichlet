@@ -88,7 +88,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.n_atoms = []
         self.n_log_likelihood = []
 
-        # Variables used in variational method
+        # Extra variables used in variational methods
         self.var_k = None
         self.var_d = None
         self.var_theta = None
@@ -138,26 +138,26 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self._initialize_gibbs_params(max_groups=max_groups, method=method)
         if show_progress is not None:
             self.show_progress = show_progress
+
         # Iterate the Gibbs steps with or without tqdm
+        burn_in_iterator = range(self.burn_in)
+        range_iterator = range(self.total_iter - self.burn_in)
         if self.show_progress:
+            from tqdm import tqdm
+            burn_in_iterator = tqdm(burn_in_iterator)
+            range_iterator = tqdm(range_iterator)
             print("Starting burn-in.")
-            from tqdm import trange
-            for _ in trange(self.burn_in):
-                self._gibbs_step()
+        for _ in burn_in_iterator:
+            self._gibbs_step()
+        if self.show_progress:
             print("Finished burn-in.")
             print("Starting training.")
-            for i in trange(self.total_iter - self.burn_in):
-                self._gibbs_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
+        for i in range_iterator:
+            self._gibbs_step()
+            if i % self.subsample_steps == 0:
+                self._save_params()
+        if self.show_progress:
             print("Finished training.")
-        else:
-            for _ in range(self.burn_in):
-                self._gibbs_step()
-            for i in range(self.total_iter - self.burn_in):
-                self._gibbs_step()
-                if i % self.subsample_steps == 0:
-                    self._save_params()
         self.gibbs_fitted = True
 
     def fit_variational(self, y, n_groups=None, warm_start=False,
@@ -216,23 +216,18 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         elbo = -np.inf
         elbo_diff = np.inf
         iterations = 0
+        t = None
         if self.show_progress:
             from tqdm import tqdm
-            with tqdm() as t:
-                while elbo_diff > tol and iterations < max_iter:
-                    self._maximize_variational()
-                    prev_elbo = elbo
-                    elbo = self._calc_elbo()
-                    elbo_diff = abs(prev_elbo - elbo)
-                    iterations += 1
-                    t.update()
-        else:
-            while elbo_diff > tol and iterations < max_iter:
-                self._maximize_variational()
-                prev_elbo = elbo
-                elbo = self._calc_elbo()
-                elbo_diff = abs(prev_elbo - elbo)
-                iterations += 1
+            t = tqdm()
+        while elbo_diff > tol and iterations < max_iter:
+            self._maximize_variational()
+            prev_elbo = elbo
+            elbo = self._calc_elbo()
+            elbo_diff = abs(prev_elbo - elbo)
+            iterations += 1
+            if t is not None:
+                t.update()
         self.var_fitted = True
         if iterations < max_iter:
             self.var_converged = True
@@ -260,20 +255,16 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         _y = self._cast_observations(y)
         y_sim = []
         if periods is None:
-            for param in self.sim_params:
-                y_sim.append(_utils.mixture_density(_y,
-                                                    param["w"],
-                                                    param["mu"],
-                                                    param["sigma"],
-                                                    param["u"]))
+            sim_params = self.sim_params
         else:
-            periods = min(periods, len(self.sim_params))
-            for param in self.sim_params[-periods:]:
-                y_sim.append(_utils.mixture_density(_y,
-                                                    param["w"],
-                                                    param["mu"],
-                                                    param["sigma"],
-                                                    param["u"]))
+            i_start = min(periods, len(self.sim_params))
+            sim_params = self.sim_params[-i_start:]
+        for param in sim_params:
+            y_sim.append(_utils.mixture_density(_y,
+                                                param["w"],
+                                                param["mu"],
+                                                param["sigma"],
+                                                param["u"]))
         return np.array(y_sim).mean(axis=0)
 
     def gibbs_map_density(self, y=None):
@@ -653,7 +644,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.map_log_likelihood = run_log_likelihood
             self.map_sim_params = self._get_run_params()
         elif self.map_log_likelihood == -np.inf:
-            # It's better than nothing
+            # Save the params to get something to compare
             self.map_sim_params = self._get_run_params()
 
     def _update_weights(self):
