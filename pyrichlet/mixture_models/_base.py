@@ -9,6 +9,7 @@ from . import _utils
 from ..exceptions import NotFittedError
 from ..weight_models import BaseWeight
 from ..utils.functions import density_students_t, density_normal
+from ..utils.validators import rng_parser
 
 
 class BaseGaussianMixture(metaclass=ABCMeta):
@@ -53,15 +54,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                  lambda_prior=1, psi_prior=None, nu_prior=None,
                  total_iter=1000, burn_in=100, subsample_steps=1,
                  show_progress=False, rng=None):
-        if rng is None:
-            self.rng = np.random.default_rng()
-        elif type(rng) is int:
-            self.rng = np.random.default_rng(rng)
-        else:
-            self.rng = rng
 
         assert total_iter > burn_in, (
             "total_iter must be greater than burn_in period")
+        self.rng = rng_parser(rng)
         self.burn_in = int(burn_in)
         self.total_iter = int(total_iter)
         self.subsample_steps = int(subsample_steps)
