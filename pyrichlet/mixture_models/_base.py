@@ -543,14 +543,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.weight_model.complete(max_groups)
 
         if method == "kmeans":
-            from sklearn.cluster import KMeans
-            # TODO wait for sklearn to implement Generator as random_state
-            # input https://github.com/scikit-learn/scikit-learn/issues/16988
-            km = KMeans(
-                n_clusters=self.var_k,
-                random_state=np.random.RandomState(self.rng.bit_generator)
-            )
-            self.d = km.fit_predict(self.y)
+            if hasattr(self, 'n'):
+                n = self.n
+            else:
+                n = 10
+            self.d = _utils.kmeans_cluster_size_biased(self.y, n, self.rng)
         elif method == "random":
             self.d = self.weight_model.random_assignment(len(self.y))
         elif method == "variational":
@@ -585,14 +582,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.var_theta = []
 
         if method == "kmeans":
-            from sklearn.cluster import KMeans
-            # TODO wait for sklearn to implement Generator as random_state
-            # input https://github.com/scikit-learn/scikit-learn/issues/16988
-            km = KMeans(
-                n_clusters=self.var_k,
-                random_state=np.random.RandomState(self.rng.bit_generator)
-            )
-            d = km.fit_predict(self.y)
+            d = _utils.kmeans_cluster_size_biased(self.y, self.var_k,
+                                                  self.rng)
             var_d = np.zeros((self.var_k, self.y.shape[0]),
                              dtype=np.float64)
             var_d[d, range(len(d))] = 1

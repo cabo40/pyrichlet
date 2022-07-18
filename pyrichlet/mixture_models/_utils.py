@@ -1,5 +1,6 @@
 from scipy.stats import invwishart, multivariate_normal
 from scipy.special import digamma, loggamma
+from sklearn.cluster import KMeans
 from itertools import repeat
 import numpy as np
 
@@ -120,3 +121,18 @@ def entropy_wishart(precision, scale):
     res -= (scale - dim - 1) / 2 * e_log_norm_wishart(precision, scale)
     res += scale * dim / 2
     return res
+
+
+def kmeans_cluster_size_biased(y, k, rng):
+    # TODO wait for sklearn to implement Generator as random_state
+    # input https://github.com/scikit-learn/scikit-learn/issues/16988
+    km = KMeans(
+        n_clusters=k,
+        random_state=np.random.RandomState(rng.bit_generator)
+    )
+    d = km.fit_predict(y)
+    _, d, d_count = np.unique(d, return_inverse=True, return_counts=True)
+    # Rename assignation vector by size bias, the group with more counts gets
+    # the label 0, and so on
+    d = np.argsort(np.argsort(-d_count))[d]
+    return d
