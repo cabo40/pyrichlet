@@ -2,6 +2,7 @@ import numpy as np
 from collections import defaultdict
 
 from ._base import BaseWeight
+from ..utils.functions import log_likelihood_beta, dirichlet_eppf
 
 
 class BetaInDirichlet(BaseWeight):
@@ -12,6 +13,19 @@ class BetaInDirichlet(BaseWeight):
         self.v = np.array([], dtype=np.float64)
         self._v_base = np.array([], dtype=np.float64)
         self._d_base = []
+
+    def weighting_log_likelihood(self):
+        v = [self.w[0]]
+        prod_v = 1 - v[-1]
+        for wj in self.w[1:]:
+            v.append(wj / prod_v)
+            prod_v *= (1 - v[-1])
+        v_unique, v_counts = np.unique(v, return_counts=True)
+        ret = 0
+        for vj in v_unique:
+            ret += log_likelihood_beta(vj, 1, self.alpha)
+        ret += dirichlet_eppf(self.a, v_counts)
+        return ret
 
     def random(self, size=None, u=None):
         if size is None and len(self.d) == 0:

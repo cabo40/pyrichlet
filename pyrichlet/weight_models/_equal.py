@@ -9,6 +9,9 @@ class EqualWeighting(BaseWeight):
         super().__init__(rng=rng)
         self.n = n
 
+    def weighting_log_likelihood(self):
+        return 0
+
     def random(self, size=None):
         self.w = np.repeat(1 / self.n, self.n)
         return self.w

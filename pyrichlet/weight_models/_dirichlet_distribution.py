@@ -18,21 +18,10 @@ class DirichletDistribution(BaseWeight):
         elif type(alpha) in (int, float):
             self.alpha = np.array([alpha] * self.n, dtype=np.float64)
 
-    def structure_log_likelihood(self, w=None, alpha=None):
-        if w is None:
-            w = self.w
-        if alpha is None:
-            alpha = self.alpha
-        return self.weight_log_likelihood(w=w, theta=alpha)
-
-    def weight_log_likelihood(self, w=None, theta=None):
-        if w is None:
-            w = self.w
-        if theta is None:
-            theta = self.alpha
-        if len(w) == 0:
+    def weighting_log_likelihood(self):
+        if len(self.w) == 0:
             return 0
-        return np.sum(dirichlet.logpdf(w, theta))
+        return np.sum(dirichlet.logpdf(self.w, self.alpha))
 
     def random(self, size=None):
         if len(self.d) > 0:
@@ -49,8 +38,9 @@ class DirichletDistribution(BaseWeight):
         return self.w
 
     def complete(self, size=None):
+        super().complete(size)
         if len(self.w) == 0:
-            self.random(None)
+            self.random()
         return self.w
 
     def fit_variational(self, variational_d):

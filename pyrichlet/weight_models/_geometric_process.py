@@ -1,6 +1,6 @@
 from ._base import BaseWeight
 from ..exceptions import NotFittedError
-from ..utils.functions import mean_log_beta
+from ..utils.functions import mean_log_beta, log_likelihood_beta
 
 import numpy as np
 from scipy.special import loggamma
@@ -15,6 +15,10 @@ class GeometricProcess(BaseWeight):
 
         self.v = np.array([], dtype=np.float64)
 
+    def weighting_log_likelihood(self):
+        ret = log_likelihood_beta(self.p, self.a, self.b)
+        return ret
+
     def random(self, size=None):
         if size is None and len(self.d) == 0:
             raise ValueError("Weight structure not fitted and `n` not passed.")
@@ -26,6 +30,7 @@ class GeometricProcess(BaseWeight):
         return self.w
 
     def complete(self, size):
+        super().complete(size)
         if len(self.v) < size:
             self.v = np.repeat(self.p, size)
             self.w = self.v * np.cumprod(np.concatenate(([1],

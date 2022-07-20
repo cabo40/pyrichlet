@@ -1,6 +1,6 @@
 from ._base import BaseWeight
 from ..exceptions import NotFittedError
-from ..utils.functions import mean_log_beta
+from ..utils.functions import mean_log_beta, log_likelihood_beta
 
 import numpy as np
 from scipy.special import loggamma
@@ -11,6 +11,16 @@ class DirichletProcess(BaseWeight):
         super().__init__(rng=rng)
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
+
+    def weighting_log_likelihood(self):
+        v = self.w[0]
+        ret = log_likelihood_beta(v, 1, self.alpha)
+        prod_v = 1 - v
+        for wj in self.w[1:]:
+            v = wj / prod_v
+            ret += log_likelihood_beta(v, 1, self.alpha)
+            prod_v *= (1 - v)
+        return ret
 
     def random(self, size=None):
         if size is None and len(self.d) == 0:
@@ -38,6 +48,7 @@ class DirichletProcess(BaseWeight):
         return self.w
 
     def complete(self, size):
+        super().complete(size)
         if len(self.v) < size:
             self.v = np.concatenate(
                 (self.v,

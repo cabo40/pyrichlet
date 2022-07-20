@@ -1,5 +1,22 @@
 import numpy as np
 from scipy.special import digamma, loggamma
+from scipy.stats import beta, betabinom, binom
+
+
+def log_likelihood_beta(v, a, b):
+    return beta.logpdf(v, a, b)
+
+
+def log_likelihood_beta_binom(x, n, a, b):
+    return betabinom.logpmf(x, n, a, b)
+
+
+def log_likelihood_binom(x, n, p):
+    return binom.logpmf(x, n, p)
+
+
+def dirichlet_eppf(alpha, partition):
+    return 0
 
 
 def mean_log_beta(a, b):

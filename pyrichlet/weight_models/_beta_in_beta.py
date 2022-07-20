@@ -3,6 +3,7 @@ from scipy.optimize import minimize, brentq
 from scipy.integrate import quad
 
 from ._base import BaseWeight
+from ..utils.functions import log_likelihood_beta
 
 
 class BetaInBeta(BaseWeight):
@@ -20,6 +21,22 @@ class BetaInBeta(BaseWeight):
         self.v = np.array([], dtype=np.float64)
         self.p_optim_max_steps = p_optim_max_steps
         self._validate_params()
+
+    def weighting_log_likelihood(self):
+        v = self.w[0]
+        beta_a = 1 + self.x / (1 - self.x) * self.p
+        beta_b = self.alpha + self.x / (1 - self.x) * (1 - self.p)
+        ret = log_likelihood_beta(v, beta_a, beta_b)
+        prod_v = 1 - v
+        for wj in self.w[1:]:
+            v = wj / prod_v
+            ret += log_likelihood_beta(v, beta_a, beta_b)
+            prod_v *= (1 - v)
+        ret += self._internal_beta_log_likelihood()
+        return ret
+
+    def _internal_beta_log_likelihood(self):
+        return log_likelihood_beta(self.p, self.a, self.b)
 
     def random(self, size=None):
         if size is None and len(self.d) == 0:
@@ -47,8 +64,7 @@ class BetaInBeta(BaseWeight):
         return self.w
 
     def complete(self, size):
-        if type(size) is not int:
-            raise TypeError("size parameter must be integer or None")
+        super().complete(size)
         if len(self.v == 0):
             self.p = self.rng.beta(self.a, self.b)
         if len(self.v) < size:

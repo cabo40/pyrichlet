@@ -1,6 +1,6 @@
 from ._base import BaseWeight
 from ..exceptions import NotFittedError
-from ..utils.functions import mean_log_beta
+from ..utils.functions import mean_log_beta, log_likelihood_beta
 
 import numpy as np
 from scipy.special import loggamma
@@ -14,6 +14,17 @@ class PitmanYorProcess(BaseWeight):
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
         self.truncation_length = truncation_length
+
+    def weighting_log_likelihood(self):
+        v = self.w[0]
+        ret = log_likelihood_beta(v, 1 - self.pyd, self.alpha)
+        prod_v = 1 - v
+        for j in range(1, len(self.w)):
+            v = self.w[j] / prod_v
+            ret += log_likelihood_beta(v, 1 - self.pyd,
+                                       self.alpha + j * self.pyd)
+            prod_v *= (1 - v)
+        return ret
 
     def random(self, size=None):
         if size is None and len(self.d) == 0:
@@ -45,8 +56,7 @@ class PitmanYorProcess(BaseWeight):
         return self.w
 
     def complete(self, size):
-        if type(size) is not int:
-            raise TypeError("size parameter must be integer or None")
+        super().complete(size)
         if self.get_size() < size:
             pitman_yor_bias = np.arange(self.get_size(), size)
             self.v = np.concatenate(

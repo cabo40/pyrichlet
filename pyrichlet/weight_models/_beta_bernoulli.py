@@ -2,6 +2,8 @@ from ._base import BaseWeight
 import numpy as np
 from scipy.special import beta as betaf
 
+from ..utils.functions import log_likelihood_beta
+
 
 class BetaBernoulli(BaseWeight):
     def __init__(self, p=1, alpha=1, rng=None):
@@ -10,6 +12,26 @@ class BetaBernoulli(BaseWeight):
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
         self.bernoullis = np.array([], dtype=int)
+
+    def weighting_log_likelihood(self):
+        ret = self._bernoulli_structure_log_likelihood()
+        ret += self._beta_structure_log_likelihood()
+        return ret
+
+    def _bernoulli_structure_log_likelihood(self):
+        ret = 0
+        if self.p == 0:
+            return ret
+        for b in self.bernoullis:
+            ret += b * np.log(self.p)
+        return ret
+
+    def _beta_structure_log_likelihood(self):
+        ret = log_likelihood_beta(self.v[0], 1, self.alpha)
+        for j in range(1, len(self.v)):
+            if not self.bernoullis[j]:
+                ret += log_likelihood_beta(self.v[j], 1, self.alpha)
+        return ret
 
     def random(self, size=None):
         if size is None:
@@ -44,8 +66,7 @@ class BetaBernoulli(BaseWeight):
         return self.w
 
     def complete(self, size):
-        if type(size) is not int:
-            raise TypeError("size parameter must be integer or None")
+        super().complete(size)
         if len(self.v) < size:
             if len(self.v) == 0:
                 self.v = self.rng.beta(a=1, b=self.alpha, size=1)

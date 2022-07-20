@@ -15,13 +15,19 @@ def random_normal_invw(mu, lam, psi, nu, rng=None):
     return ret_mu, ret_sigma
 
 
+def log_likelihood_normal_invw(mu, sigma, mu0, lam0, psi0, nu0):
+    log_sigma = invwishart.logpdf(sigma, nu0, psi0)
+    log_mu = multivariate_normal.logpdf(mu, mu0, sigma / lam0)
+    return log_sigma + log_mu
+
+
 def posterior_norm_invw_params(y, mu, lam, psi, nu):
-    n, _ = y.shape
+    n = len(y)
     ret_mu = (lam * mu + n * y.mean(axis=0)) / (lam + n)
     ret_lam = lam + n
     ret_psi = psi + n * np.cov(y.T, bias=True) + (
-            (lam * n) / (lam + n) *
-            ((y.mean(axis=0) - mu) @ (y.mean(axis=0) - mu)))
+            (lam * n) / (lam + n) * np.outer(y.mean(axis=0) - mu,
+                                             y.mean(axis=0) - mu))
     ret_nu = nu + n
     return {"mu": ret_mu, "lambda": ret_lam, "psi": ret_psi, "nu": ret_nu}
 
@@ -56,14 +62,14 @@ def rejection_sample(f, max_y, a=0, b=1, size=None, *, rng=None):
         return x
 
 
-def mixture_density(x, w, mu, sigma, u):
+def mixture_density(x, w, theta, u):
     k = len(w)
 
     ret = []
     for j in range(k):
         ret.append(multivariate_normal.pdf(x,
-                                           mu[j],
-                                           sigma[j],
+                                           theta[j][0],
+                                           theta[j][1],
                                            1))
 
     ret = np.array(ret).T
@@ -74,13 +80,13 @@ def mixture_density(x, w, mu, sigma, u):
     return ret
 
 
-def cluster(x, w, mu, sigma, u=None):
+def cluster(x, w, theta, u=None):
     k = len(w)
     assign_prob = []
     for j in range(k):
         assign_prob.append(multivariate_normal.pdf(x,
-                                                   mu[j],
-                                                   sigma[j],
+                                                   theta[j][0],
+                                                   theta[j][1],
                                                    1))
     assign_prob = np.array(assign_prob).T
     if u is not None:

@@ -1,6 +1,9 @@
 from ._base import BaseWeight
 import numpy as np
 
+from ..utils.functions import log_likelihood_beta, log_likelihood_beta_binom, \
+    log_likelihood_binom
+
 
 class BetaBinomial(BaseWeight):
     def __init__(self, n=0, alpha=1, rng=None):
@@ -10,6 +13,20 @@ class BetaBinomial(BaseWeight):
 
         self.v = np.array([], dtype=np.float64)
         self.binomials = np.array([], dtype=int)
+
+    def weighting_log_likelihood(self):
+        b = self.binomials[0]
+        res = log_likelihood_beta_binom(b, self.n, 1, self.alpha)
+        for j in range(1, len(self.v) - 1):
+            v = self.v[j]
+            res += log_likelihood_beta(v, 1 + b,
+                                       self.alpha + self.n - b)
+            b = self.binomials[j]
+            res += log_likelihood_binom(b, self.n, v)
+
+        res += log_likelihood_beta(self.v[-1], 1 + b,
+                                   self.alpha + self.n - b)
+        return res
 
     def random(self, size=None):
         if size is None:
@@ -35,8 +52,7 @@ class BetaBinomial(BaseWeight):
         return self.w
 
     def complete(self, size):
-        if type(size) is not int:
-            raise TypeError("size parameter must be integer or None")
+        super().complete(size)
         if len(self.v) == 0:
             v0 = self.rng.beta(1, self.alpha)
             self.binomials = self.rng.binomial(self.n, v0, size=1)
