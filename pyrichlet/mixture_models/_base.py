@@ -1,5 +1,6 @@
 from sklearn.cluster import SpectralClustering
 from scipy.stats import multivariate_normal
+from collections import defaultdict
 import pandas as pd
 import numpy as np
 
@@ -72,8 +73,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         # Variables used in Gibbs sampler
         self.d = np.array([])
-        self.mu = np.array([])
-        self.sigma = np.array([[]])
+        self.theta = {}
         self.u = np.array([])
         self.affinity_matrix = np.array([])
         self.map_sim_params = None
@@ -132,6 +132,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self._initialize_common_params(y)
         if not warm_start:
             self._initialize_gibbs_params(max_groups=max_groups, method=method)
+            self._update_map_params()
         if show_progress is not None:
             self.show_progress = show_progress
 
@@ -145,11 +146,13 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             print("Starting burn-in.")
         for _ in burn_in_iterator:
             self._gibbs_step()
+            self._update_map_params()
         if self.show_progress:
             print("Finished burn-in.")
             print("Starting training.")
         for i in range_iterator:
             self._gibbs_step()
+            self._update_map_params()
             if i % self.subsample_steps == 0:
                 self._save_params()
         if self.show_progress:
@@ -258,8 +261,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         for param in sim_params:
             y_sim.append(_utils.mixture_density(_y,
                                                 param["w"],
-                                                param["mu"],
-                                                param["sigma"],
+                                                param["theta"],
                                                 param["u"]))
         return np.array(y_sim).mean(axis=0)
 
@@ -282,8 +284,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         _y = self._cast_observations(y)
         return _utils.mixture_density(_y,
                                       self.map_sim_params["w"],
-                                      self.map_sim_params["mu"],
-                                      self.map_sim_params["sigma"],
+                                      self.map_sim_params["theta"],
                                       self.map_sim_params["u"])
 
     def gibbs_eap_affinity_matrix(self, y=None):
@@ -310,8 +311,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         for params in self.sim_params:
             grouping = _utils.cluster(_y,
                                       params["w"],
-                                      params["mu"],
-                                      params["sigma"],
+                                      params["theta"],
                                       params["u"])[0]
             affinity_matrix += np.equal(grouping, grouping[:, None])
         affinity_matrix /= len(self.sim_params)
@@ -362,8 +362,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         _y = self._cast_observations(y)
         ret = _utils.cluster(_y,
                              self.map_sim_params["w"],
-                             self.map_sim_params["mu"],
-                             self.map_sim_params["sigma"],
+                             self.map_sim_params["theta"],
                              self.map_sim_params["u"])
         if not full:
             ret = ret[0]
@@ -443,6 +442,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features), default=None
             The points to cluster using the MAP assignations. If `None`
             the data used at fitting is used.
+        full: bool, default=False
+            If False (default), only the maximum a posteriori clustering is
+            returned. If True, the variational assignation probabilty is also
+            returned.
         """
         if not self.var_fitted:
             raise NotFittedError("Object must be fitted with fit_variational"
@@ -522,18 +525,29 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         max_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
             the  number of groups drawn from the weight model is not caped.
-        method: str, default="random"
+        method: str
             "kmeans": does a kmeans initialization
             "random": does a random initialization based on the prior models
             "variational": fits the variational distribution an uses the MAP
                 parameters as initialization
         """
-        self.mu = np.empty((0, *self.mu_prior.shape))
-        self.sigma = np.empty((0, *self.psi_prior.shape))
+
+        def atom_generator():
+            mu, sigma = _utils.random_normal_invw(
+                mu=self.mu_prior,
+                lam=self.lambda_prior,
+                psi=self.psi_prior,
+                nu=self.nu_prior,
+                rng=self.rng
+            )
+            return np.atleast_1d(mu), np.atleast_2d(sigma)
+
         self.sim_params = []
         self.n_groups = []
         self.n_atoms = []
         self.total_saved_steps = 0
+
+        self.theta = defaultdict(atom_generator)
         self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
         self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
                                   len(self.y))
@@ -557,7 +571,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         else:
             raise AttributeError("method param must be one of 'kmeans', "
                                  "'random', 'variational'")
-        self._complete_atoms()
 
     def _initialize_variational_params(self, var_k, method="kmeans"):
         """
@@ -612,21 +625,22 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
     def _get_run_params(self):
         return {"w": self.weight_model.get_weights(),
-                "mu": self.mu,
-                "sigma": self.sigma,
+                "theta": dict(self.theta),
                 "u": self.u,
                 "d": self.d}
 
     def _save_params(self):
         self.sim_params.append(self._get_run_params())
         self.n_groups.append(len(np.unique(self.d)))
-        self.n_atoms.append(len(self.mu))
-        self._update_map_params()
+        self.n_atoms.append(len(self.theta))
         self.affinity_matrix += np.equal(self.d, self.d[:, None])
         self.total_saved_steps += 1
 
     def _update_map_params(self):
-        run_log_likelihood = self._y_log_likelihood()
+        """Calc the likelihood and parameters of the run. Update MAP if the
+        likelihood is greater
+        """
+        run_log_likelihood = self._run_log_likelihood()
         if self.map_log_likelihood < run_log_likelihood:
             self.map_log_likelihood = run_log_likelihood
             self.map_sim_params = self._get_run_params()
@@ -642,15 +656,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.weight_model.tail(1 - min(self.u))
 
     def _update_atoms(self):
-        assert len(self.mu) == len(self.sigma)
-        self.d = np.unique(self.d, return_inverse=True)[1]
-        self.mu = []
-        self.sigma = []
-        for j in range(max(self.d) + 1):
-            inj = (self.d == j).nonzero()[0]
-
+        for j in np.unique(self.d):
+            mask_j = self.d == j
             posterior_params = _utils.posterior_norm_invw_params(
-                self.y[inj],
+                self.y[mask_j],
                 mu=self.mu_prior,
                 lam=self.lambda_prior,
                 psi=self.psi_prior,
@@ -661,25 +670,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 psi=posterior_params["psi"],
                 nu=posterior_params["nu"],
                 rng=self.rng)
-            self.mu.append(temp_mu)
-            self.sigma.append(temp_sigma)
-
-        self.mu = np.array(self.mu).reshape(-1, *self.mu_prior.shape)
-        self.sigma = np.array(self.sigma).reshape(-1, *self.psi_prior.shape)
-
-    def _complete_atoms(self):
-        missing_len = self.weight_model.get_size() - len(self.mu)
-        for _ in range(missing_len):
-            temp_mu, temp_sigma = _utils.random_normal_invw(
-                mu=self.mu_prior,
-                lam=self.lambda_prior,
-                psi=self.psi_prior,
-                nu=self.nu_prior,
-                rng=self.rng
-            )
-            self.mu = np.concatenate((self.mu, [np.atleast_1d(temp_mu)]))
-            self.sigma = np.concatenate((self.sigma,
-                                         [np.atleast_2d(temp_sigma)]))
+            temp_mu = np.atleast_1d(temp_mu)
+            temp_sigma = np.atleast_2d(temp_sigma)
+            self.theta[j] = (temp_mu, temp_sigma)
 
     def _update_d(self):
         log_prob = self._d_log_likelihood_vector()
@@ -688,15 +681,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def _gibbs_step(self):
         self._update_atoms()
         self._update_weights()
-        self._complete_atoms()
         self._update_d()
 
     def _d_log_likelihood_vector(self):
         with np.errstate(divide='ignore'):
             log_probability = np.array(
                 [multivariate_normal.logpdf(self.y,
-                                            self.mu[j],
-                                            self.sigma[j],
+                                            self.theta[j][0],
+                                            self.theta[j][1],
                                             1)
                  for j in range(self.weight_model.get_size())]
             )
@@ -705,15 +697,47 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 self.u))
         return log_probability
 
+    def _run_log_likelihood(self):
+        ret = 0
+        ret += self._y_log_likelihood()
+        ret += self._d_log_likelihood()
+        ret += self._w_log_likelihood()
+        ret += self._theta_log_likelihood()
+        return ret
+
     def _y_log_likelihood(self):
+        """returns the loglikelihood of f(y|d, w, theta)"""
         ret = 0
         with np.errstate(divide='ignore'):
-            for di in np.unique(self.d):
-                ret += np.sum(multivariate_normal.logpdf(self.y[self.d == di],
-                                                         self.mu[di],
-                                                         self.sigma[di],
+            for j in np.unique(self.d):
+                ret += np.sum(multivariate_normal.logpdf(self.y[self.d == j],
+                                                         self.theta[j][0],
+                                                         self.theta[j][1],
                                                          1))
         return ret
+
+    def _d_log_likelihood(self):
+        """returns the loglikelihood of f(d|w)"""
+        return self.weight_model.assignation_log_likelihood(self.d)
+
+    def _w_log_likelihood(self):
+        """returns the loglikelihood of f(w)"""
+        return self.weight_model.weighting_log_likelihood()
+
+    def _theta_log_likelihood(self):
+        """returns the loglikelihood of f(theta)"""
+        res = 0
+        for j in np.unique(self.d):
+            mu, sigma = self.theta[j]
+            res += _utils.log_likelihood_normal_invw(
+                mu=mu,
+                sigma=sigma,
+                mu0=self.mu_prior,
+                lam0=self.lambda_prior,
+                psi0=self.psi_prior,
+                nu0=self.nu_prior
+            )
+        return res
 
     def _maximize_variational(self):
         self._update_var_d()
@@ -769,10 +793,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                  v_precision_j @ (self.y - v_mu_j).T)).sum(0)
                          ) / 2
             var_d[j, :] = log_d_ji
-        var_d -= var_d.max(0)
+        var_d -= var_d.max(axis=0, initial=-np.inf)
         var_d = np.exp(var_d)
         var_d += np.finfo(np.float64).eps
-        var_d /= var_d.sum(0)
+        var_d /= var_d.sum(axis=0)
         self.var_d = var_d
 
     def _e_q_log_p_x(self):
