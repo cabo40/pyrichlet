@@ -118,7 +118,7 @@ class BaseWeight(ABC):
 
     def reset(self):
         """Resets the conditional vector `d` to None"""
-        self.d = None
+        self.d = np.array([], dtype=np.int64)
 
     def get_weights(self):
         """Returns the last weighting structure drawn"""
