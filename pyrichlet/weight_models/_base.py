@@ -51,8 +51,8 @@ class BaseWeight(ABC):
 
         This method appends weights to the truncated weighting structure
         `self.w` until reaching a length of `size` and then returns `self.w`.
-        Note: This method is a constrain on the minimum number of elements in
-        the truncated weighting structure. No truncation is induced in case
+        Note: This method sets a constraint on the minimum number of elements
+        in the truncated weighting structure. No truncation is induced in case
         `size` is less than `len(self.w)` and the full length of `self.w` is
         returned.
 
@@ -65,6 +65,20 @@ class BaseWeight(ABC):
         -------
         np.array
             Array of the weighted structure.
+        """
+        if size is not None and type(size) not in (int, np.int64):
+            raise TypeError("size parameter must be integer or None")
+
+    @abstractmethod
+    def weighting_log_likelihood(self):
+        """Return the given structure log-likelihood
+
+        This method returns log f(w) for the underlying weighting model.
+
+        Returns
+        -------
+        float
+            The log-likelihood value
         """
         pass
 
@@ -113,7 +127,7 @@ class BaseWeight(ABC):
         """Returns the log-likelihood of an assignment `d` given the weights"""
         if d is None:
             d = self.d
-        self.complete(max(d))
+        self.complete(max(d) + 1)
         return np.sum(np.log(self.w[d]))
 
     def reset(self):
