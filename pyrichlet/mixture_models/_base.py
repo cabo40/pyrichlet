@@ -706,8 +706,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         ret = 0
         ret += self._y_log_likelihood()
         ret += self._d_log_likelihood()
-        ret += self._w_log_likelihood()
-        ret += self._theta_log_likelihood()
         return ret
 
     def _y_log_likelihood(self):
