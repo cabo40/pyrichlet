@@ -21,7 +21,7 @@ class DirichletDistribution(BaseWeight):
     def weighting_log_likelihood(self):
         if len(self.w) == 0:
             return 0
-        return np.sum(dirichlet.logpdf(self.w, self.alpha))
+        return dirichlet.logpdf(self.w, self.alpha)
 
     def random(self, size=None):
         if len(self.d) > 0:
