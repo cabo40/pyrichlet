@@ -11,7 +11,7 @@ class BetaBernoulli(BaseWeight):
         self.p = p
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
-        self.bernoullis = np.array([], dtype=int)
+        self.bernoullis = np.array([1], dtype=int)
 
     def weighting_log_likelihood(self):
         ret = self._bernoulli_structure_log_likelihood()
@@ -84,12 +84,10 @@ class BetaBernoulli(BaseWeight):
         return self.w
 
     def _random_bernoullis(self, size):
-        if len(self.d) == 0:
-            self.bernoullis = self._rng.binomial(n=1, p=self.p, size=size)
-            self.bernoullis[0] = 0
-        else:
+        bernoullis = self._rng.binomial(n=1, p=self.p, size=size)
+        self.bernoullis[0] = 1
+        if len(self.d) > 0:
             size_fit = self.d.max()
-            bernoullis = self._rng.binomial(n=1, p=self.p, size=size)
             a_c = np.bincount(self.d)
             b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
             bernoullis[0] = 0
@@ -118,5 +116,5 @@ class BetaBernoulli(BaseWeight):
                 not_p_times_minus = (1 - p) * g_minus if p < 1 else 0
                 p = p_times_plus / (p_times_plus + not_p_times_minus)
                 bernoullis[j] = self._rng.binomial(n=1, p=p)
-            self.bernoullis = bernoullis
+        self.bernoullis = bernoullis
         return self.bernoullis
