@@ -53,7 +53,7 @@ class BetaInBeta(BaseWeight):
                 a_c = a_c[:size]
                 b_c = b_c[:size]
 
-            self.v = self.rng.beta(
+            self.v = self._rng.beta(
                 a=1 + self.x / (1 - self.x) * self.p + a_c,
                 b=self.alpha + self.x / (1 - self.x) * (1 - self.p) + b_c
             )
@@ -66,10 +66,10 @@ class BetaInBeta(BaseWeight):
     def complete(self, size):
         super().complete(size)
         if len(self.v == 0):
-            self.p = self.rng.beta(self.a, self.b)
+            self.p = self._rng.beta(self.a, self.b)
         if len(self.v) < size:
             if self.x < 1:
-                concat_value = self.rng.beta(
+                concat_value = self._rng.beta(
                     a=1 + self.x / (1 - self.x) * self.p,
                     b=self.alpha + self.x / (1 - self.x) * (1 - self.p),
                     size=size - len(self.v)
@@ -83,11 +83,11 @@ class BetaInBeta(BaseWeight):
 
     def random_p(self):
         if len(self.d) == 0:
-            self.p = self.rng.beta(a=self.a, b=self.b)
+            self.p = self._rng.beta(a=self.a, b=self.b)
             return self.p
         if self.x == 1:
-            self.p = self.rng.beta(a=self.a + len(self.d),
-                                   b=self.b + self.d.sum())
+            self.p = self._rng.beta(a=self.a + len(self.d),
+                                    b=self.b + self.d.sum())
             return self.p
         elif self.x == 0:
             return self.p
@@ -95,11 +95,11 @@ class BetaInBeta(BaseWeight):
         if self.p_method == "static":
             return self.p
         elif self.p_method == "independent":
-            self.p = self.rng.beta(a=self.a, b=self.b)
+            self.p = self._rng.beta(a=self.a, b=self.b)
             return self.p
         elif self.p_method == "geometric":
-            self.p = self.rng.beta(a=self.a + len(self.d),
-                                   b=self.b + self.d.sum())
+            self.p = self._rng.beta(a=self.a + len(self.d),
+                                    b=self.b + self.d.sum())
             return self.p
         elif self.p_method == "max-likelihood":
             max_param = minimize(
@@ -111,7 +111,7 @@ class BetaInBeta(BaseWeight):
                 self.p = max_param.x[0]
             return self.p
         elif self.p_method == "inverse-sampling":
-            unif = self.rng.uniform()
+            unif = self._rng.uniform()
 
             def f(p):
                 return np.exp(self.structure_log_likelihood(p=p))

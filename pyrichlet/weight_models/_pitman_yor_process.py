@@ -31,9 +31,9 @@ class PitmanYorProcess(BaseWeight):
             raise ValueError("Weight structure not fitted and `n` not passed.")
         if len(self.d) == 0:
             pitman_yor_bias = np.arange(size)
-            self.v = self.rng.beta(a=1 - self.pyd,
-                                   b=self.alpha + pitman_yor_bias * self.pyd,
-                                   size=size)
+            self.v = self._rng.beta(a=1 - self.pyd,
+                                    b=self.alpha + pitman_yor_bias * self.pyd,
+                                    size=size)
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
         else:
@@ -45,7 +45,7 @@ class PitmanYorProcess(BaseWeight):
                 b_c = b_c[:size]
 
             pitman_yor_bias = np.arange(len(a_c))
-            self.v = self.rng.beta(
+            self.v = self._rng.beta(
                 a=1 - self.pyd + a_c,
                 b=self.alpha + pitman_yor_bias * self.pyd + b_c
             )
@@ -62,8 +62,8 @@ class PitmanYorProcess(BaseWeight):
             self.v = np.concatenate(
                 (
                     self.v,
-                    self.rng.beta(a=1 - self.pyd,
-                                  b=self.alpha + pitman_yor_bias * self.pyd)
+                    self._rng.beta(a=1 - self.pyd,
+                                   b=self.alpha + pitman_yor_bias * self.pyd)
                 )
             )
             self.w = self.v * np.cumprod(np.concatenate(([1],

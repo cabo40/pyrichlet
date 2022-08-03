@@ -44,7 +44,7 @@ class BetaBinomial(BaseWeight):
             beta_phased = self.binomials[:-1] + self.binomials[1:]
             a = 1 + a_c + beta_phased
             b = self.alpha + b_c + 2 * self.n - beta_phased
-            self.v = self.rng.beta(a=a, b=b)
+            self.v = self._rng.beta(a=a, b=b)
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
             if size is not None:
@@ -54,16 +54,16 @@ class BetaBinomial(BaseWeight):
     def complete(self, size):
         super().complete(size)
         if len(self.v) == 0:
-            v0 = self.rng.beta(1, self.alpha)
-            self.binomials = self.rng.binomial(self.n, v0, size=1)
-            self.v = self.rng.beta(1 + self.binomials[-1],
-                                   self.alpha + self.n - self.binomials[-1],
-                                   size=1)
+            v0 = self._rng.beta(1, self.alpha)
+            self.binomials = self._rng.binomial(self.n, v0, size=1)
+            self.v = self._rng.beta(1 + self.binomials[-1],
+                                    self.alpha + self.n - self.binomials[-1],
+                                    size=1)
         while len(self.v) < size:
             self.binomials = np.append(self.binomials,
-                                       self.rng.binomial(self.n, self.v[-1]))
+                                       self._rng.binomial(self.n, self.v[-1]))
             self.v = np.append(
-                self.v, self.rng.beta(
+                self.v, self._rng.beta(
                     1 + self.binomials[-1],
                     self.alpha + self.n - self.binomials[-1])
             )
@@ -76,6 +76,6 @@ class BetaBinomial(BaseWeight):
         b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
         a_c = np.append(0, a_c)
         b_c = np.append(0, b_c)
-        beta_rv = self.rng.beta(1 + a_c, self.alpha + b_c)
-        self.binomials = self.rng.binomial(self.n, beta_rv)
+        beta_rv = self._rng.beta(1 + a_c, self.alpha + b_c)
+        self.binomials = self._rng.binomial(self.n, beta_rv)
         return self.binomials

@@ -32,9 +32,9 @@ class DirichletDistribution(BaseWeight):
             else:
                 a_c = np.bincount(self.d)
                 a_c.resize(len(self.alpha), refcheck=False)
-                self.w = self.rng.dirichlet(self.alpha + a_c)
+                self.w = self._rng.dirichlet(self.alpha + a_c)
         else:
-            self.w = self.rng.dirichlet(self.alpha)
+            self.w = self._rng.dirichlet(self.alpha)
         return self.w
 
     def complete(self, size=None):

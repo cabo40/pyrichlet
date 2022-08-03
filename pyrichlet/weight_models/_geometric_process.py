@@ -11,7 +11,7 @@ class GeometricProcess(BaseWeight):
         super().__init__(rng=rng)
         self.a = a
         self.b = b
-        self.p = self.rng.beta(a=self.a, b=self.b)
+        self.p = self._rng.beta(a=self.a, b=self.b)
 
         self.v = np.array([], dtype=np.float64)
 
@@ -25,7 +25,7 @@ class GeometricProcess(BaseWeight):
         if size is None:
             size = max(self.d) + 1
         self.v = self.v[:0]
-        self.p = self.rng.beta(self.a + len(self.d), self.b + self.d.sum())
+        self.p = self._rng.beta(self.a + len(self.d), self.b + self.d.sum())
         self.complete(size)
         return self.w
 

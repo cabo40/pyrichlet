@@ -12,11 +12,11 @@ class BaseWeight(ABC):
 
     def __init__(self, rng=None):
         if rng is None:
-            self.rng = np.random.default_rng()
+            self._rng = np.random.default_rng()
         elif type(rng) is int:
-            self.rng = np.random.default_rng(rng)
+            self._rng = np.random.default_rng(rng)
         else:
-            self.rng = rng
+            self._rng = rng
 
         self.w = np.array([], dtype=np.float64)
         self.d = np.array([], dtype=np.int64)
@@ -153,7 +153,7 @@ class BaseWeight(ABC):
     def random_assignment(self, size=None):
         """Returns a sample draw of the categorical assignment from the current
         state normalized weighting structure"""
-        u = self.rng.uniform(size=size)
+        u = self._rng.uniform(size=size)
         inverse_sampling = np.greater.outer(
             u, self.get_normalized_cumulative_weights()
         )

@@ -44,7 +44,7 @@ class BetaBernoulli(BaseWeight):
             self._random_bernoullis(size)
             mask_change = self.bernoullis
             mask_change = np.cumsum(mask_change)
-            self.v = self.rng.beta(a=1, b=self.alpha, size=mask_change[-1] + 1)
+            self.v = self._rng.beta(a=1, b=self.alpha, size=mask_change[-1] + 1)
             self.v = self.v[mask_change]
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
@@ -58,7 +58,7 @@ class BetaBernoulli(BaseWeight):
             a_c = np.bincount(mask_change, a_c)
             b_c = np.bincount(mask_change, b_c)
 
-            self.v = self.rng.beta(a=1 + a_c, b=self.alpha + b_c)
+            self.v = self._rng.beta(a=1 + a_c, b=self.alpha + b_c)
             self.v = self.v[mask_change]
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
@@ -69,15 +69,15 @@ class BetaBernoulli(BaseWeight):
         super().complete(size)
         if len(self.v) < size:
             if len(self.v) == 0:
-                self.v = self.rng.beta(a=1, b=self.alpha, size=1)
-            mask_change = self.rng.binomial(n=1,
-                                            p=self.p,
-                                            size=size - len(self.v))
+                self.v = self._rng.beta(a=1, b=self.alpha, size=1)
+            mask_change = self._rng.binomial(n=1,
+                                             p=self.p,
+                                             size=size - len(self.v))
             self.bernoullis = np.concatenate((self.bernoullis, mask_change))
             mask_change = np.cumsum(mask_change)
             temp_v = np.concatenate((
                 [self.v[-1]],
-                self.rng.beta(a=1, b=self.alpha, size=mask_change[-1])))
+                self._rng.beta(a=1, b=self.alpha, size=mask_change[-1])))
             self.v = np.concatenate((self.v, temp_v[mask_change]))
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
@@ -85,11 +85,11 @@ class BetaBernoulli(BaseWeight):
 
     def _random_bernoullis(self, size):
         if len(self.d) == 0:
-            self.bernoullis = self.rng.binomial(n=1, p=self.p, size=size)
+            self.bernoullis = self._rng.binomial(n=1, p=self.p, size=size)
             self.bernoullis[0] = 0
         else:
             size_fit = self.d.max()
-            bernoullis = self.rng.binomial(n=1, p=self.p, size=size)
+            bernoullis = self._rng.binomial(n=1, p=self.p, size=size)
             a_c = np.bincount(self.d)
             b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
             bernoullis[0] = 0
@@ -117,6 +117,6 @@ class BetaBernoulli(BaseWeight):
                 p_times_plus = p * g_plus if p > 0 else 0
                 not_p_times_minus = (1 - p) * g_minus if p < 1 else 0
                 p = p_times_plus / (p_times_plus + not_p_times_minus)
-                bernoullis[j] = self.rng.binomial(n=1, p=p)
+                bernoullis[j] = self._rng.binomial(n=1, p=p)
             self.bernoullis = bernoullis
         return self.bernoullis

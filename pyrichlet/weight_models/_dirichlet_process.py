@@ -29,7 +29,7 @@ class DirichletProcess(BaseWeight):
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         if len(self.d) == 0:
-            self.v = self.rng.beta(a=1, b=self.alpha, size=size)
+            self.v = self._rng.beta(a=1, b=self.alpha, size=size)
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
         else:
@@ -40,7 +40,7 @@ class DirichletProcess(BaseWeight):
                 a_c = a_c[:size]
                 b_c = b_c[:size]
 
-            self.v = self.rng.beta(a=1 + a_c, b=self.alpha + b_c)
+            self.v = self._rng.beta(a=1 + a_c, b=self.alpha + b_c)
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
             if size is not None:
@@ -52,7 +52,7 @@ class DirichletProcess(BaseWeight):
         if len(self.v) < size:
             self.v = np.concatenate(
                 (self.v,
-                 self.rng.beta(a=1, b=self.alpha, size=size - len(self.v))))
+                 self._rng.beta(a=1, b=self.alpha, size=size - len(self.v))))
             self.w = self.v * np.cumprod(np.concatenate(([1],
                                                          1 - self.v[:-1])))
         return self.w
