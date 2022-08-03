@@ -1,7 +1,8 @@
 import numpy as np
-from collections import defaultdict
+from scipy.special import loggamma
 
 from ._base import BaseWeight
+from ..mixture_models._utils import gumbel_max_sampling
 from ..utils.functions import log_likelihood_beta, dirichlet_log_eppf
 
 
@@ -12,15 +13,11 @@ class BetaInDirichlet(BaseWeight):
         self.alpha = alpha
         self.v = np.array([], dtype=np.float64)
         self._v_base = np.array([], dtype=np.float64)
-        self._d_base = []
+        self._d_base = np.array([], dtype=np.int64)
+        self._count_base = []
 
     def weighting_log_likelihood(self):
-        v = [self.w[0]]
-        prod_v = 1 - v[-1]
-        for wj in self.w[1:]:
-            v.append(wj / prod_v)
-            prod_v *= (1 - v[-1])
-        v_unique, v_counts = np.unique(v, return_counts=True)
+        v_unique, v_counts = np.unique(self.v, return_counts=True)
         ret = 0
         for vj in v_unique:
             ret += log_likelihood_beta(vj, 1, self.alpha)
@@ -35,70 +32,88 @@ class BetaInDirichlet(BaseWeight):
                 raise TypeError("size parameter must be integer or None")
         self.v = self.v[:0]
         self._v_base = self._v_base[:0]
-        self._d_base = self._d_base[:0]
         if len(self.d) == 0:
             self.complete(size)
-        else:
-            max_d = self.d.max()
-            c = defaultdict(lambda: 0)
-            c_prime = defaultdict(lambda: 1)
-            self.complete(max_d + 1)
-            v_conj_prod = np.concatenate([[1], np.cumprod(1 - self.v[:-1])])
-            if u is None:
-                u = self._rng.uniform(0, self.w[self.d])
-            pre_c = u / v_conj_prod[self.d]
-            for j in np.unique(self.d):
-                c[j] = max(0, np.max(pre_c[self.d == j]))
-            for k, dk in enumerate(self.d):
-                for j in range(dk):
-                    c_j_prime = 1 - u[k] * (1 - self.v[j]) / self.w[dk]
-                    c_prime[j] = min(c_prime[j], c_j_prime)
-            len_v = len(self.v)
+            return self.w
+        n = max(self.d) + 1
+        if len(self._d_base) < n:
+            self._d_base = np.concatenate(
+                [self._d_base, [0] * (n - len(self._d_base))])
+        elif len(self._d_base) > n:
+            self._d_base = self._d_base[:n]
+        k = max(self._d_base) + 1
+        v_base = np.empty(k, dtype=np.float64)
+        a_c = np.bincount(self.d)
+        b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
+        # Update inner weights given the inner assignations
+        for jj in range(k):
+            a_c_base = np.sum(a_c[self._d_base == jj])
+            b_c_base = np.sum(b_c[self._d_base == jj])
+            v_base[jj] = self._rng.beta(a=1 + a_c_base,
+                                        b=self.alpha + b_c_base)
+        self._v_base = v_base
+        # Update the inner assignations given inner weights and other
+        # assignations. It is, update inner d_jj given d_{-jj}, inner v.
+        for j in range(n):
             if self.a == 0:
-                self._v_base[0] = self._rng.beta(1 + len(self.d),
-                                                 self.alpha + self.d.sum())
-                self.v = np.repeat(self._v_base[0], len_v)
-                len_v = 0
-            for j in range(len_v):
-                mask = (self._v_base > c[j]) & (self._v_base < c_prime[j])
-                temp_v_base = self._v_base[mask]
-                len_temp_v = len(temp_v_base)
-                if len_temp_v == 0:
-                    k = 0
+                if j < len(self._d_base):
+                    self._d_base[j] = 0
                 else:
-                    p = np.array([1] * len_temp_v + [self.a],
-                                 dtype=np.float64)
-                    p /= p.sum()
-                    k = self._rng.choice(range(len_temp_v + 1), p=p)
-                if k < len_temp_v:
-                    self.v[j] = temp_v_base[k]
-                else:
-                    trunc_beta = self._rng.uniform(
-                        1 - np.power(1 - c[j], self.alpha),
-                        1 - np.power(1 - c_prime[j], self.alpha)
-                    )
-                    trunc_beta = 1 - np.power(1 - trunc_beta, 1 / self.alpha)
-                    self._v_base = np.append(self._v_base, trunc_beta)
-                    self._d_base += [1]
-                    self.v[j] = trunc_beta
-            self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                         1 - self.v[:-1])))
+                    self._d_base = np.append(self._d_base, 0)
+                continue
+            d_base_reduced = np.delete(self._d_base, j)
+            k = np.max(d_base_reduced)
+            log_prob = []
+            new_base = False
+            for dd in range(k + 2):
+                base_count = sum(d_base_reduced == dd)
+                if base_count == 0 and not new_base:
+                    new_base = True
+                    temp_log_prob = (
+                            np.log(self.a) + loggamma(1 + a_c[j])
+                            + loggamma(self.alpha + b_c[j])
+                            - loggamma(1 + self.alpha + a_c[j] + b_c[j]))
+                    log_prob.append(temp_log_prob)
+                    continue
+                if base_count == 0:
+                    if dd < k + 1:
+                        log_prob.append(-np.inf)
+                    continue
+                temp_log_prob = (
+                        np.log(base_count)
+                        + a_c[j] * np.log(self._v_base[dd])
+                        + b_c[j] * np.log(1 - self._v_base[dd]))
+                log_prob.append(temp_log_prob)
+            log_prob = np.array(log_prob)
+            if j < len(self._d_base):
+                self._d_base[j] = gumbel_max_sampling(log_prob, rng=self._rng)
+            else:
+                self._d_base = np.append(self._d_base,
+                                         gumbel_max_sampling(log_prob,
+                                                             rng=self._rng))
+        self._count_base = [
+            np.sum(self._d_base == j) for j in range(len(self._v_base))]
+        self.v = self._v_base[self._d_base]
+        self.w = self.v * np.cumprod(np.concatenate(([1],
+                                                     1 - self.v[:-1])))
         return self.w
 
     def complete(self, size):
         if len(self._v_base) == 0:
             self._v_base = self._rng.beta(1, self.alpha, size=1)
-            self._d_base += [1]
+            self._count_base = [1]
         while len(self.v) < size:
-            p = np.array(self._d_base + [self.a], dtype=np.float64)
+            p = np.array(self._count_base + [self.a], dtype=np.float64)
             p /= p.sum()
             jj = self._rng.choice(range(len(self._v_base) + 1), p=p)
-            if jj <= len(self._v_base):
+            if jj < len(self._v_base):
                 self.v = np.append(self.v, self._v_base[jj])
+                self._count_base[jj] += 1
             else:
                 new_v_base = self._rng.beta(1, self.alpha)
                 self._v_base = np.append(self._v_base, new_v_base)
-                self._d_base += [1]
+                self._count_base += [1]
                 self.v = np.append(self.v, new_v_base)
+            self._d_base = np.append(self._d_base, jj)
         self.w = self.v * np.cumprod(np.concatenate(([1],
                                                      1 - self.v[:-1])))
