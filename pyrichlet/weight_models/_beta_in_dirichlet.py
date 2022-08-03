@@ -2,7 +2,7 @@ import numpy as np
 from collections import defaultdict
 
 from ._base import BaseWeight
-from ..utils.functions import log_likelihood_beta, dirichlet_eppf
+from ..utils.functions import log_likelihood_beta, dirichlet_log_eppf
 
 
 class BetaInDirichlet(BaseWeight):
@@ -24,7 +24,7 @@ class BetaInDirichlet(BaseWeight):
         ret = 0
         for vj in v_unique:
             ret += log_likelihood_beta(vj, 1, self.alpha)
-        ret += dirichlet_eppf(self.a, v_counts)
+        ret += dirichlet_log_eppf(self.a, v_counts)
         return ret
 
     def random(self, size=None, u=None):

@@ -15,8 +15,13 @@ def log_likelihood_binom(x, n, p):
     return binom.logpmf(x, n, p)
 
 
-def dirichlet_eppf(alpha, partition):
-    return 0
+def dirichlet_log_eppf(alpha, partition):
+    k = len(partition)
+    n = sum(partition)
+    res = loggamma(alpha) - loggamma(alpha + n)
+    res += k * np.log(alpha)
+    res += np.sum(loggamma(partition))
+    return res
 
 
 def mean_log_beta(a, b):
