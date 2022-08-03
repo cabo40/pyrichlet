@@ -96,8 +96,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         self.show_progress = show_progress
 
-    def fit_gibbs(self, y, max_groups=None, warm_start=False,
-                  show_progress=None, method="random"):
+    def fit_gibbs(self, y, init_groups=None, warm_start=False,
+                  show_progress=None, method="kmeans"):
         """
         Fit posterior distribution using Gibbs sampling.
 
@@ -110,9 +110,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features)
             The input sample.
 
-        max_groups: int, default=None
+        init_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
-            the  number of groups drawn from the weight model is not caped.
+            the  initial number of groups is drawn from the attribute n.
 
         warm_start : bool, default=False
             Whether to continue the sampling process from a past run or start
@@ -131,7 +131,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         """
         self._initialize_common_params(y)
         if not warm_start:
-            self._initialize_gibbs_params(max_groups=max_groups, method=method)
+            self._initialize_gibbs_params(init_groups=init_groups,
+                                          method=method)
             self._update_map_params()
         if show_progress is not None:
             self.show_progress = show_progress
@@ -513,7 +514,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         if self.nu_prior is None:
             self.nu_prior = self.y.shape[1]
 
-    def _initialize_gibbs_params(self, max_groups=None, method="random"):
+    def _initialize_gibbs_params(self, init_groups=None, method="kmeans"):
         """
         Initialize the Gibbs sampler latent variables
 
@@ -522,9 +523,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         Parameters
         ----------
-        max_groups: int, default=None
+        init_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
-            the  number of groups drawn from the weight model is not caped.
+            the  initial number of groups is drawn from the attribute n.
         method: str
             "kmeans": does a kmeans initialization
             "random": does a random initialization based on the prior models
@@ -551,16 +552,20 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.affinity_matrix = np.zeros((len(self.y), len(self.y)))
         self.u = self.rng.uniform(0 + np.finfo(np.float64).eps, 1,
                                   len(self.y))
-        if max_groups is None:
+        if init_groups is None:
             self.weight_model.tail(1 - min(self.u))
         else:
-            self.weight_model.complete(max_groups)
+            self.weight_model.complete(init_groups)
 
         if method == "kmeans":
             if hasattr(self, 'n'):
                 n = self.n
             else:
-                n = 10
+                if init_groups is not None:
+                    n = init_groups
+                else:
+                    raise ValueError("init_groups must be an integer for"
+                                     " k-means initialization")
             self.d = _utils.kmeans_cluster_size_biased(self.y, n, self.rng)
         elif method == "random":
             self.d = self.weight_model.random_assignment(len(self.y))

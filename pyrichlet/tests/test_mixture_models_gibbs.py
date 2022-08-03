@@ -16,7 +16,7 @@ class TestMixtureModels(BaseTest):
 
     def test_dirichlet_process(self):
         mixture = mm.DirichletProcessMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -24,7 +24,7 @@ class TestMixtureModels(BaseTest):
 
     def test_pitman_yor_process(self):
         mixture = mm.PitmanYorMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -32,7 +32,7 @@ class TestMixtureModels(BaseTest):
 
     def test_geometric_process(self):
         mixture = mm.GeometricProcessMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -40,7 +40,7 @@ class TestMixtureModels(BaseTest):
 
     def test_beta_in_dirichlet(self):
         mixture = mm.BetaInDirichletMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -48,7 +48,7 @@ class TestMixtureModels(BaseTest):
 
     def test_beta_in_beta(self):
         mixture = mm.BetaInBetaMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -56,7 +56,7 @@ class TestMixtureModels(BaseTest):
 
     def test_beta_bernoulli(self):
         mixture = mm.BetaBernoulliMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
@@ -64,7 +64,7 @@ class TestMixtureModels(BaseTest):
 
     def test_beta_binomial(self):
         mixture = mm.BetaBinomialMixture(rng=self.rng)
-        mixture.fit_gibbs(self.y)
+        mixture.fit_gibbs(self.y, init_groups=2)
         fitted_density = mixture.gibbs_map_density()
         mean_squared_error = np.power(fitted_density - self.y_density,
                                       2).mean()
