@@ -93,12 +93,12 @@ class DirichletDistribution(BaseWeight):
         )
         return res
 
-    def variational_mean_w(self, j):
+    def variational_mean_w_j(self, j):
         if j > self.variational_k:
             return 0
         return self.variational_params[j] / self.variational_params.sum()
 
-    def variational_mode_w(self, j):
+    def variational_mode_w_j(self, j):
         if j > self.variational_k:
             return 0
         alpha = self.variational_params.sum()

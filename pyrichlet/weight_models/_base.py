@@ -2,6 +2,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+from ..utils.validators import rng_parser
+
 
 class BaseWeight(ABC):
     """Base class for weighting structure models.
@@ -11,12 +13,7 @@ class BaseWeight(ABC):
     """
 
     def __init__(self, rng=None):
-        if rng is None:
-            self._rng = np.random.default_rng()
-        elif type(rng) is int:
-            self._rng = np.random.default_rng(rng)
-        else:
-            self._rng = rng
+        self._rng = rng_parser(rng)
 
         self.w = np.array([], dtype=np.float64)
         self.d = np.array([], dtype=np.int64)
@@ -69,7 +66,6 @@ class BaseWeight(ABC):
         if size is not None and type(size) not in (int, np.int64):
             raise TypeError("size parameter must be integer or None")
 
-    @abstractmethod
     def weighting_log_likelihood(self):
         """Return the given structure log-likelihood
 
@@ -128,7 +124,9 @@ class BaseWeight(ABC):
         if d is None:
             d = self.d
         self.complete(max(d) + 1)
-        return np.sum(np.log(self.w[d]))
+        with np.errstate(divide='ignore'):
+            ret = np.sum(np.log(self.w[d]))
+        return ret
 
     def reset(self):
         """Resets the conditional vector `d` to None"""
@@ -188,7 +186,7 @@ class BaseWeight(ABC):
         raise NotImplementedError
 
     def variational_mean_log_p_w(self):
-        """Returns the mean of log p(d|w)
+        """Returns the mean of log p(w)
 
         This method returns the expected value of the logarithm of the
         probability of assignation d given w under the variational
@@ -197,7 +195,7 @@ class BaseWeight(ABC):
         raise NotImplementedError
 
     def variational_mean_log_q_w(self):
-        """Returns the mean of log p(d|w)
+        """Returns the mean of log q(w)
 
         This method returns the expected value of the logarithm of the
         probability of assignation d given w under the variational
@@ -205,7 +203,7 @@ class BaseWeight(ABC):
         """
         raise NotImplementedError
 
-    def variational_mean_w(self, j):
+    def variational_mean_w_j(self, j):
         """Returns the mean of w_j
 
         This method returns the expected value of the j-th weighting factor
@@ -213,7 +211,7 @@ class BaseWeight(ABC):
         """
         raise NotImplementedError
 
-    def variational_mode_w(self, j):
+    def variational_mode_w_j(self, j):
         """Returns the mean of w_j
 
         This method returns the expected value of the j-th weighting factor

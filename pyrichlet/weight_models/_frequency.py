@@ -58,12 +58,12 @@ class FrequencyWeighting(BaseWeight):
             raise NotFittedError
         return 0
 
-    def variational_mean_w(self, j):
+    def variational_mean_w_j(self, j):
         if j >= self.variational_k:
             return 0
         return self.variational_d.sum(1)[j] / self.variational_d.sum()
 
-    def variational_mode_w(self, j):
+    def variational_mode_w_j(self, j):
         if j > self.variational_k:
             return 0
         return self.variational_d.sum(1)[j] / self.variational_d.sum()

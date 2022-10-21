@@ -41,8 +41,8 @@ class EqualWeighting(BaseWeight):
     def variational_mean_log_q_w(self):
         return 0
 
-    def variational_mean_w(self, j):
+    def variational_mean_w_j(self, j):
         return 1 / self.n * (j < self.n)
 
-    def variational_mode_w(self, j):
+    def variational_mode_w_j(self, j):
         return 1 / self.n * (j < self.n)

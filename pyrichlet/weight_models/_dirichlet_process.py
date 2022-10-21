@@ -29,9 +29,7 @@ class DirichletProcess(BaseWeight):
             if type(size) is not int:
                 raise TypeError("size parameter must be integer or None")
         if len(self.d) == 0:
-            self.v = self._rng.beta(a=1, b=self.alpha, size=size)
-            self.w = self.v * np.cumprod(np.concatenate(([1],
-                                                         1 - self.v[:-1])))
+            self.complete(size)
         else:
             a_c = np.bincount(self.d)
             b_c = np.concatenate((np.cumsum(a_c[::-1])[-2::-1], [0]))
@@ -114,7 +112,7 @@ class DirichletProcess(BaseWeight):
             res -= loggamma(params[0]) + loggamma(params[1])
         return res
 
-    def variational_mean_w(self, j):
+    def variational_mean_w_j(self, j):
         if j >= self.variational_k:
             return 0
         res = 1
@@ -126,7 +124,7 @@ class DirichletProcess(BaseWeight):
                 j].sum()
         return res
 
-    def variational_mode_w(self, j):
+    def variational_mode_w_j(self, j):
         if j >= self.variational_k:
             return 0
         res = 1
