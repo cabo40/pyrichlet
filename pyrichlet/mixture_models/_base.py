@@ -211,7 +211,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             else:
                 var_k = n_groups
             self._initialize_variational_params(var_k=var_k,
-                                                method=init_method)
+                                                init_method=init_method)
         elbo = -np.inf
         elbo_diff = np.inf
         iterations = 0
@@ -494,6 +494,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             raise NotFittedError("Object must be fitted with fit_variational"
                                  " method")
         _y = self._cast_observations(y)
+        if dim is None:
+            dim = np.arange(_y.shape[1])
         if isinstance(dim, int):
             len_dim = 1
         else:
