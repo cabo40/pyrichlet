@@ -1,7 +1,6 @@
-from scipy.stats import invwishart, multivariate_normal
+from scipy.stats import invwishart, multivariate_normal, norm
 from scipy.special import digamma, loggamma
 from sklearn.cluster import KMeans
-from itertools import repeat
 import numpy as np
 
 
@@ -62,25 +61,35 @@ def rejection_sample(f, max_y, a=0, b=1, size=None, *, rng=None):
         return x
 
 
-def mixture_density(x, w, theta, u):
+def mixture_density(x, w, theta, dim=None, component=None):
     k = len(w)
 
     ret = []
-    for j in range(k):
-        ret.append(multivariate_normal.pdf(x,
-                                           theta[j][0],
-                                           theta[j][1],
-                                           1))
-
+    if component is None:
+        iterator = range(k)
+    else:
+        iterator = [component]
+    for j in iterator:
+        if dim is None:
+            ret.append(multivariate_normal.pdf(x,
+                                               theta[j][0],
+                                               theta[j][1],
+                                               1))
+        elif type(dim) in [list, np.ndarray]:
+            ret.append(multivariate_normal.pdf(x,
+                                               theta[j][0][dim],
+                                               theta[j][1][:, dim][dim, :],
+                                               1))
+        elif type(dim) is int:
+            ret.append(norm.pdf(x[:, 0],
+                                theta[j][0][dim],
+                                np.sqrt(theta[j][1][dim, dim])))
     ret = np.array(ret).T
-    mask = (np.array(list(repeat(u, k))) <
-            np.array(list(repeat(w, len(u)))).transpose())
-
-    ret = np.atleast_2d(ret.dot(mask / mask.sum(0))).mean(1)
+    ret = np.atleast_2d(ret).mean(1)
     return ret
 
 
-def cluster(x, w, theta, u=None):
+def cluster(x, w, theta):
     k = len(w)
     assign_prob = []
     for j in range(k):
@@ -89,12 +98,8 @@ def cluster(x, w, theta, u=None):
                                                    theta[j][1],
                                                    1))
     assign_prob = np.array(assign_prob).T
-    if u is not None:
-        mask = (np.array(list(repeat(u, k))) <
-                np.array(list(repeat(w, len(u)))).transpose())
-
-        w = (mask / mask.sum(0)).sum(1) / len(u)
     assign_prob = assign_prob * w
+    assign_prob /= assign_prob.sum(1)[:, None]
     grp = np.argmax(assign_prob, axis=1)
     uncertainty = 1 - assign_prob[range(len(x)), grp]
     u_grp, ret = np.unique(grp, return_inverse=True)

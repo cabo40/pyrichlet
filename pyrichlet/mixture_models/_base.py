@@ -24,7 +24,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     ----------
     weight_model : BaseWeight, default=None
         The weighting model for the mixing components
-    mu_prior : {array, np.array}, default=None
+    mu_prior : {float, array, np.array}, default=None
         The prior centering parameter of the prior normal - inverse Wishart
         distribution. If None, the mean of the observations to fit will be used
     lambda_prior : float, default=1
@@ -38,7 +38,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         The degrees of freedom of the prior normal - inverse Wishart
         distribution. If None, the dimension of the scale matrix will be used.
     total_iter : int, default=1000
-        The total number of steps in the Gibbs sampler algorithm.
+        The total number of steps in the Gibbs sampler algorithm or the max
+        number of steps for the variational algorithm.
     burn_in : int, default=100
         The number of steps in the Gibbs sampler to discard in expected a
         posteriori (EAP) estimations.
@@ -70,6 +71,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         self.weight_model = weight_model
         self.y = np.array([])
+        self._column_names = None
 
         # Variables used in Gibbs sampler
         self.d = np.array([])
@@ -97,7 +99,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.show_progress = show_progress
 
     def fit_gibbs(self, y, init_groups=None, warm_start=False,
-                  show_progress=None, method="kmeans"):
+                  show_progress=None, init_method="kmeans"):
         """
         Fit posterior distribution using Gibbs sampling.
 
@@ -123,7 +125,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             If show_progress is True, a progress bar from the tqdm library is
             displayed.
 
-        method: str, default="random"
+        init_method: str, default="random"
             "random": does a random initialization based on the prior models
             "kmeans": does a kmeans initialization
             "variational": fits the variational distribution an uses the MAP
@@ -132,7 +134,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self._initialize_common_params(y)
         if not warm_start:
             self._initialize_gibbs_params(init_groups=init_groups,
-                                          method=method)
+                                          method=init_method)
             self._update_map_params()
         if show_progress is not None:
             self.show_progress = show_progress
@@ -161,12 +163,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.gibbs_fitted = True
 
     def fit_variational(self, y, n_groups=None, warm_start=False,
-                        show_progress=None, tol=1e-8, max_iter=1000,
-                        method='kmeans'):
+                        show_progress=None, tol=1e-8, init_method='kmeans'):
         """
         Fit posterior variational distribution using mean field theory.
 
-        This method does up to `max_iter` steps of the gradient descent
+        This method does up to `self.total_iter` steps of the gradient descent
         algorithm to fit the variational distributions of weights, atoms and
         assignations of the mixture.
 
@@ -194,13 +195,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             iterations. The process finishes when the change is less than
             `tol`.
 
-        max_iter: int, default=1000
-            The maximum number of iterations in the gradient descent algorithm.
-
-        method : str, default="kmeans"
-            "kmeans": does a kmeans initialization
-            "variational": fits the variational distribution an uses the MAP
-            parameters as initialization
+        init_method : str, default="kmeans"
+            "kmeans": initialize variational parameters using k-means algorithm
+            "random": initialize variational parameters using a random
+                assignment
         """
         if show_progress is not None:
             self.show_progress = show_progress
@@ -212,7 +210,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 raise AttributeError("n_groups must be a positive integer")
             else:
                 var_k = n_groups
-            self._initialize_variational_params(var_k=var_k, method=method)
+            self._initialize_variational_params(var_k=var_k,
+                                                method=init_method)
         elbo = -np.inf
         elbo_diff = np.inf
         iterations = 0
@@ -220,7 +219,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         if self.show_progress:
             from tqdm import tqdm
             t = tqdm()
-        while elbo_diff > tol and iterations < max_iter:
+        while elbo_diff > tol and iterations < self.total_iter:
             self._maximize_variational()
             prev_elbo = elbo
             elbo = self._calc_elbo()
@@ -229,10 +228,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             if t is not None:
                 t.update()
         self.var_fitted = True
-        if iterations < max_iter:
+        if iterations < self.total_iter:
             self.var_converged = True
 
-    def gibbs_eap_density(self, y=None, periods=None):
+    def gibbs_eap_density(self, y=None, dim=None, component=None,
+                          periods=None):
         """
         Returns the (Gibbs fitted) expected a posteriori density at y
 
@@ -245,13 +245,17 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features), default=None
             The data points over which to evaluate the EAP density. If `None`
             the data used at fitting is used.
-
+        dim: int, {array-like} default=None
+            The desired dimension index for which to marginalize the density,
+            if None, all dimensions are used.
+        component: int default=None
+            Only returns the scaled density for a particular component.
         periods : int, default=None
             The number of saved periods to use counting backwards from the
             last Gibbs step. If `None`, all saved periods are used.
         """
         if not self.gibbs_fitted:
-            raise NotFittedError("Object must be fitted with gibbs_fit method")
+            raise NotFittedError("Object must be fitted with fit_gibbs method")
         _y = self._cast_observations(y)
         y_sim = []
         if periods is None:
@@ -263,10 +267,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             y_sim.append(_utils.mixture_density(_y,
                                                 param["w"],
                                                 param["theta"],
-                                                param["u"]))
+                                                dim=dim,
+                                                component=component))
         return np.array(y_sim).mean(axis=0)
 
-    def gibbs_map_density(self, y=None):
+    def gibbs_map_density(self, y=None, dim=None, component=None):
         """
         Returns the (Gibbs fitted) maximum a posteriori density at y
 
@@ -279,14 +284,20 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features), default=None
             The data points over which to evaluate the MAP density. If `None`
             the data used at fitting is used.
+        dim: int, {array-like} default=None
+            The desired dimension index for which to marginalize the density,
+            if None, all dimensions are used.
+        component: int default=None
+            Only returns the scaled density for a particular component.
         """
         if not self.gibbs_fitted:
-            raise NotFittedError("Object must be fitted with gibbs_fit method")
+            raise NotFittedError("Object must be fitted with fit_gibbs method")
         _y = self._cast_observations(y)
         return _utils.mixture_density(_y,
                                       self.map_sim_params["w"],
                                       self.map_sim_params["theta"],
-                                      self.map_sim_params["u"])
+                                      dim=dim,
+                                      component=component)
 
     def gibbs_eap_affinity_matrix(self, y=None):
         """
@@ -304,16 +315,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             the data used at fitting is used.
         """
         if not self.gibbs_fitted:
-            raise NotFittedError("Object must be fitted with gibbs_fit method")
+            raise NotFittedError(
+                "Object must be fitted with the fit_gibbs method")
         if y is None:
             return self.affinity_matrix / self.total_saved_steps
         _y = self._cast_observations(y)
         affinity_matrix = np.zeros((len(_y), len(_y)))
         for params in self.sim_params:
-            grouping = _utils.cluster(_y,
-                                      params["w"],
-                                      params["theta"],
-                                      params["u"])[0]
+            grouping = _utils.cluster(_y, params["w"], params["theta"])[0]
             affinity_matrix += np.equal(grouping, grouping[:, None])
         affinity_matrix /= len(self.sim_params)
         return affinity_matrix
@@ -322,10 +331,11 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         """
         Returns the (Gibbs fitted) expected a posteriori cluster for y
 
-        This method must be called after fitting a dataset with `fit_gibbs`.
-        It returns the EAP clustering for the observations `y`. It uses the
-        spectral clustering algorithm over the EAP affinity matrix for
-        consensus.
+        This method must be called after fitting a dataset with
+        `fit_gibbs`.
+        It returns the EAP consensus clustering for the observations `y`.
+        It uses the spectral clustering algorithm over the EAP affinity matrix
+         as consensus algorithm.
 
         Parameters
         ----------
@@ -336,7 +346,8 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             The number of clusters to output.
         """
         if not self.gibbs_fitted:
-            raise NotFittedError("Object must be fitted with gibbs_fit method")
+            raise NotFittedError(
+                "Object must be fitted with the fit_gibbs method")
         sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed')
         return sc.fit_predict(self.gibbs_eap_affinity_matrix(y))
 
@@ -359,22 +370,112 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             uncertainties is returned.
         """
         if not self.gibbs_fitted:
-            raise NotFittedError("Object must be fitted with gibbs_fit method")
+            raise NotFittedError(
+                "Object must be fitted with fit_gibbs method")
         _y = self._cast_observations(y)
         ret = _utils.cluster(_y,
                              self.map_sim_params["w"],
-                             self.map_sim_params["theta"],
-                             self.map_sim_params["u"])
+                             self.map_sim_params["theta"])
         if not full:
             ret = ret[0]
         return ret
 
-    def var_eap_density(self, y=None):
+    def gibbs_map_pairplot(self):
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as ticker
+        from scipy.stats import chi2
+        from scipy.linalg import ldl
+
+        names = self._column_names
+        n_feats = self.y.shape[1]
+        grp = self.gibbs_map_cluster()
+
+        fig, axes = plt.subplots(nrows=n_feats, ncols=n_feats, sharex='col',
+                                 figsize=(n_feats * 2, n_feats * 2))
+        fig.set_dpi(150)
+        alpha = 0.05
+        alpha_radius = np.sqrt(chi2.ppf(1 - alpha, 2))
+        color = plt.get_cmap('tab10')
+        if max(grp) > 10:
+            color = color(np.linspace(0, 1, len(np.unique(grp)) + 1))
+        else:
+            color = color(np.linspace(0, 1, 10))
+
+        # We set labels for each subplot on the left and lower borders
+        # and set a shared y-axis for all subplots except those in the diagonal
+        for it in range(n_feats):
+            ax = axes[-1, it]
+            ax.set_xlabel(names[it])
+            ax = axes[it, 0]
+            ax.set_ylabel(names[it])
+            for it2 in range(n_feats - 1):
+                if it == it2:
+                    continue
+                it3 = it2 + 1
+                if it == it3:
+                    it3 += 1
+                if it3 == n_feats:
+                    continue
+                ax = axes[it, it2]
+                ax.sharey(axes[it, it3])
+
+        # Iterates over all subplots and does a density plot over the diagonal
+        # and scatters off the diagonal
+        for it in range(n_feats):
+            for it2 in range(n_feats):
+                ax = axes[it2, it]
+                ax.xaxis.set_major_locator(ticker.LinearLocator(numticks=4))
+                ax.yaxis.set_major_locator(ticker.LinearLocator(numticks=4))
+                ax.tick_params(axis='y', labelrotation=90)
+                ax.tick_params(labelsize=8)
+                ticks = ax.xaxis.get_major_ticks()
+                ticks[0].label1.set_visible(False)
+                ticks[-1].label1.set_visible(False)
+                ticks = ax.yaxis.get_major_ticks()
+                ticks[0].label1.set_visible(False)
+                ticks[-1].label1.set_visible(False)
+                ax.grid(color='lightgray', linestyle='--', alpha=0.5)
+                if it == it2:
+                    y_min = self.y[:, it].min()
+                    y_max = self.y[:, it].max()
+                    y_ptp = y_max - y_min
+                    y_range = np.linspace(y_min - y_ptp / 4,
+                                          y_max + y_ptp / 4,
+                                          100)
+                    for j in np.unique(grp):
+                        dens = self.gibbs_map_density(y_range, dim=it,
+                                                      component=j)
+                        # ax.plot(y_range, dens, c=color[j])
+                        ax.fill_between(y_range, dens, interpolate=True,
+                                        color=color[j], alpha=0.5)
+                else:
+                    ax.scatter(self.y[:, it], self.y[:, it2], s=10,
+                               c=color[grp], alpha=0.5)
+                    for j in np.unique(grp):
+                        mu = self.map_sim_params['theta'][j][0]
+                        mu = mu[[it, it2]]
+                        sigma = self.map_sim_params['theta'][j][1]
+                        sigma = sigma[[it, it2], :][:, [it, it2]]
+                        ldl_sigma = ldl(sigma)
+                        sig_sq = ldl_sigma[0] @ np.sqrt(
+                            ldl_sigma[1]) @ ldl_sigma[0].T
+                        circle_points = np.array(
+                            [np.cos(np.linspace(0, 2 * np.pi, 100)),
+                             np.sin(np.linspace(0, 2 * np.pi,
+                                                100))]).T * alpha_radius
+                        circle_points = np.matmul(circle_points, sig_sq) + mu
+                        ax.plot(circle_points[:, 0], circle_points[:, 1],
+                                linestyle='--', c=color[j])
+                        # break
+            axes[it, it].tick_params(axis='y', colors='white')
+
+    def var_eap_density(self, y=None, dim=None, component=None):
         """
         Returns the expected a posteriori density at y using variational
         inference
 
-        This method is called after fitting a dataset with `fit_variational`.
+        This method is called after fitting a dataset with
+        `fit_variational`.
         It returns the density at `y` as described by the fitted variational
         distributions using the expected density at each point.
 
@@ -383,24 +484,38 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         y : {array-like} of shape (n_samples, n_features), default=None
             The points at which to draw the variational EAP density. If `None`
             the data used at fitting is used.
+        dim: int, {array-like} default=None
+            The desired dimension index for which to marginalize the density,
+            if None, all dimensions are used.
+        component: int default=None
+            Only returns the scaled density for a particular component.
         """
         if not self.var_fitted:
             raise NotFittedError("Object must be fitted with fit_variational"
                                  " method")
         _y = self._cast_observations(y)
-        dim = _y.shape[1]
+        if isinstance(dim, int):
+            len_dim = 1
+        else:
+            len_dim = len(dim)
         f_x = np.zeros(len(_y))
-        for j, vt_j in enumerate(self.var_theta):
+        if component is None:
+            iterator = enumerate(self.var_theta)
+        else:
+            iterator = [(component, self.var_theta[component])]
+        for j, vt_j in iterator:
             v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            v_mu_j = v_mu_j[dim]
+            v_precision_j = v_precision_j[:, dim][dim, :]
             f_x += density_students_t(
                 _y, v_mu_j,
                 v_precision_j * (v_scale_j + 1 -
-                                 dim) * v_lambda_j / (1 + v_lambda_j),
-                v_scale_j + 1 - dim
-            ) * self.weight_model.variational_mean_w(j)
+                                 len_dim) * v_lambda_j / (1 + v_lambda_j),
+                v_scale_j + 1 - len_dim
+            ) * self.weight_model.variational_mean_w_j(j)
         return f_x
 
-    def var_map_density(self, y=None):
+    def var_map_density(self, y=None, dim=None, component=None):
         """
         Returns the maximum a posteriori density at y using variational
         inference
@@ -419,15 +534,93 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             raise NotFittedError("Object must be fitted with fit_variational"
                                  " method")
         _y = self._cast_observations(y)
-        dim = _y.shape[1]
+        if isinstance(dim, int):
+            len_dim = 1
+        else:
+            len_dim = len(dim)
         f_x = np.zeros(len(_y))
-        for j, vt_j in enumerate(self.var_theta):
+        if component is None:
+            iterator = enumerate(self.var_theta)
+        else:
+            iterator = [(component, self.var_theta[component])]
+        for j, vt_j in iterator:
             v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+            v_mu_j = v_mu_j[dim]
+            v_precision_j = v_precision_j[:, dim][dim, :]
             map_mu = v_mu_j
-            map_precision = (v_scale_j - dim) * v_precision_j
+            map_precision = (v_scale_j - len_dim) * v_precision_j
             f_x += density_normal(_y, map_mu, map_precision
-                                  ) * self.weight_model.variational_mode_w(j)
+                                  ) * self.weight_model.variational_mode_w_j(j)
         return f_x
+
+    def var_eap_affinity_matrix(self, y=None):
+        """
+        Returns the (Variational fitted) affinity matrix for the observations y
+
+        This init_method must be called after fitting a dataset with
+        `fit_variational`.
+        It returns an affinity matrix for `y`. The entry (it,it2) of the
+        returned matrix denotes the variational probability of draws in the
+        assignation of y[it] and y[it2].
+
+        Parameters
+        ----------
+        y : {array-like} of shape (n_samples, n_features), default=None
+            The data points for which to get an affinity matrix. If `None`
+            the data used at fitting is used.
+        """
+        if not self.var_fitted:
+            raise NotFittedError(
+                "Object must be fitted with the fit_variational method")
+        if y is None:
+            var_d = self.var_d
+        else:
+            _y = self._cast_observations(y)
+            dim = y.shape[1]
+            var_d = np.zeros((self.var_k, y.shape[0]), dtype=np.float64)
+            for j, vt_j in enumerate(self.var_theta):
+                v_mu_j, v_lambda_j, v_precision_j, v_scale_j = vt_j
+                log_d_ji = self.weight_model.variational_mean_log_w_j(j)
+                log_d_ji += _utils.e_log_norm_wishart(v_precision_j,
+                                                      v_scale_j) / 2
+                log_d_ji -= dim * np.log(2 * np.pi) / 2
+                log_d_ji -= dim / v_lambda_j / 2
+                log_d_ji -= (v_scale_j *
+                             ((y - v_mu_j).T * (
+                                     v_precision_j @ (y - v_mu_j).T)).sum(
+                                 0)
+                             ) / 2
+                var_d[j, :] = log_d_ji
+            var_d -= var_d.max(axis=0, initial=-np.inf)
+            var_d = np.exp(var_d)
+            var_d += np.finfo(np.float64).eps
+            var_d /= var_d.sum(axis=0)
+        affinity_matrix = var_d.T @ var_d
+        return affinity_matrix
+
+    def var_eap_spectral_consensus_cluster(self, y=None, n_clusters=1):
+        """
+        Returns the (Variational fitted) expected a posteriori cluster for y
+
+        This init_method must be called after fitting a dataset with
+        `fit_variational`.
+        It returns the EAP consensus clustering for the observations `y`.
+        It uses the spectral clustering algorithm over the EAP affinity matrix
+        as the consensus algorithm.
+
+        Parameters
+        ----------
+        y : {array-like} of shape (n_samples, n_features), default=None
+            The data points to cluster. If `None`
+            the data used at fitting is used.
+        n_clusters: int, default=1
+            The number of clusters to output.
+        """
+        if not self.var_fitted:
+            raise NotFittedError(
+                "Object must be fitted with fit_variational init_method")
+        sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed')
+        return sc.fit_predict(self.var_eap_affinity_matrix(y))
 
     def var_map_cluster(self, y=None, full=False):
         """
@@ -493,16 +686,32 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         """
         Initialize the prior variables if not given
         """
-        if isinstance(y, (pd.DataFrame, pd.Series)):
+        if isinstance(y, pd.DataFrame):
             self.y = y.to_numpy()
+            self._column_names = y.columns
+        elif isinstance(y, pd.Series):
+            self.y = y.to_numpy()
+            if y.name is None:
+                self._column_names = np.array([0])
+            else:
+                self._column_names = np.array([y.name])
         elif isinstance(y, list):
             self.y = np.array(y)
+            if self.y.ndim == 1:
+                self.y = self.y.reshape(-1, 1)
+                self._column_names = np.array([0])
+            else:
+                self._column_names = np.arange(self.y.shape[1])
         elif isinstance(y, np.ndarray):
-            self.y = y
+            self.y = np.copy(y)
+            if self.y.ndim == 1:
+                self.y = self.y.reshape(-1, 1)
+                self._column_names = np.array([0])
+            else:
+                self._column_names = np.arange(self.y.shape[1])
         else:
-            raise TypeError('type is not valid')
-        if self.y.ndim == 1:
-            self.y = self.y.reshape(-1, 1)
+            raise TypeError('Invalid type for variable y')
+
         if self.mu_prior is None:
             self.mu_prior = self.y.mean(axis=0)
         else:
@@ -574,10 +783,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                  n_groups=self.weight_model.get_size())
             self.d = self.var_map_cluster()
         else:
-            raise AttributeError("method param must be one of 'kmeans', "
+            raise AttributeError("init_method param must be one of 'kmeans', "
                                  "'random', 'variational'")
 
-    def _initialize_variational_params(self, var_k, method="kmeans"):
+    def _initialize_variational_params(self, var_k, init_method="kmeans"):
         """
         Initialize the variational parameters for the variational distributions
 
@@ -591,7 +800,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             Maximum number of groups to assign in the initialization. If None,
             the  number of groups drawn from the weight model is not caped.
 
-        method: str
+        init_method: str
             "kmeans": initialize variational parameters using k-means algorithm
             "random": initialize variational parameters using a random
                 assignment
@@ -599,7 +808,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         self.var_k = var_k
         self.var_theta = []
 
-        if method == "kmeans":
+        if init_method == "kmeans":
             d = _utils.kmeans_cluster_size_biased(self.y, self.var_k,
                                                   self.rng)
             var_d = np.zeros((self.var_k, self.y.shape[0]),
@@ -609,7 +818,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
             self.weight_model.fit_variational(np.empty(shape=(self.var_k, 0)))
             self._update_var_theta()
             self._update_var_d()
-        elif method == "random":
+        elif init_method == "random":
             for _ in range(self.var_k):
                 mu_j, temp_psi = _utils.random_normal_invw(
                     mu=self.mu_prior,
@@ -624,7 +833,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                        np.linalg.inv(temp_psi), self.nu_prior])
             self.var_d = np.tile(1 / self.var_k, (self.var_k, self.y.shape[0]))
         else:
-            raise AttributeError("method param must be one of 'kmeans', "
+            raise AttributeError("init_method param must be one of 'kmeans', "
                                  "'random'")
         self.weight_model.fit_variational(self.var_d)
 
