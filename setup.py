@@ -15,9 +15,8 @@ setuptools.setup(
     cmdclass=versioneer.get_cmdclass(),
     author="Fidel Selva",
     author_email="cfso100@gmail.com",
-    description="A package for density estimation and clustering using "
-                "infinite Gaussian mixtures with stick-breaking weighting "
-                "structures",
+    description="A package for doing density estimation and clustering using "
+                "Gaussian mixtures with BNP weighting models",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/cabo40/pyrichlet",

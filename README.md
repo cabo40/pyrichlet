@@ -1,7 +1,7 @@
 # Project description
 
-Pyrichlet is a package for doing data analysis via density estimation
-and clustering using Gaussian mixtures of several weighting structures.
+Pyrichlet is a package for doing density estimation and clustering using 
+Gaussian mixtures with BNP weighting models
 
 # Installation
 
@@ -14,7 +14,7 @@ pip install pyrichlet
 For a specific version:
 
 ```
-pip install pyrichlet==0.0.3
+pip install pyrichlet==0.0.4
 ```
 
 
@@ -23,32 +23,8 @@ pip install pyrichlet==0.0.3
 This is a quick guide. For a more detailed usage see
 https://pyrichlet.readthedocs.io/en/latest/index.html.
 
-The weighting structure models that this package implements are
 
-- `DirichletDistribution`
-- `DirichletProcess`
-- `PitmanYorProcess`
-- `GeometricProcess`
-- `BetaInBetaProcess`
-- `BetaInDirichletProcess`
-- `BetaBernoulliProcess`
-- `BetaBinomialProcess`
-
-They can be imported and initialized as
-
-```python
-from pyrichlet import weight_models
-
-wm = weight_models.DirichletProcess()
-wm.fit([0, 0, 1])
-wm.random(10)
-wm.random_assignment(100)
-wm.reset()
-wm.random(10)
-wm.random_assignment(100)
-```
-
-For each weighting structure there is an associated Gaussian mixture model, formerly
+The mixture models that this package implements are
 
 - `DirichletDistributionMixture`
 - `DirichletProcessMixture`
@@ -59,7 +35,8 @@ For each weighting structure there is an associated Gaussian mixture model, form
 - `BetaBernoulliMixture`
 - `BetaBinomialMixture`
 
-The mixture models can fit array or dataframe data for density estimation
+They can be fitted for an array or dataframe using a Gibbs sampler or
+variational Bayes methods,
 
 ```python
 from pyrichlet import mixture_models
@@ -67,14 +44,19 @@ from pyrichlet import mixture_models
 mm = mixture_models.DirichletProcessMixture()
 y = [1, 2, 3, 4]
 mm.fit_gibbs(y)
-x = 2.5
-f_x = mm.gibbs_eap_density(x)
 
 mm.fit_variational(y, n_groups=2)
+```
+
+and use the fitted class to do density estimation
+
+```python
+x = 2.5
+f_x = mm.gibbs_eap_density(x)
 f_x = mm.var_eap_density(x)
 ```
 
-or for cluster estimation
+or clustering
 
 ```python
 mm.var_map_cluster()
