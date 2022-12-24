@@ -1,2 +1,3 @@
 include versioneer.py
 include pyrichlet/_version.py
+include pyrichlet/utils/_data/*.csv
