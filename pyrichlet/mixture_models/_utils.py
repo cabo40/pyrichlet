@@ -139,7 +139,7 @@ def kmeans_cluster_size_biased(y, k, rng):
     # input https://github.com/scikit-learn/scikit-learn/issues/16988
     km = KMeans(
         n_clusters=k,
-        n_init=1,
+        n_init=10,
         random_state=np.random.RandomState(rng.bit_generator)
     )
     d = km.fit_predict(y)
