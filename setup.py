@@ -31,11 +31,10 @@ setuptools.setup(
         'numpy',
         'scipy',
         'pandas',
-        'scikit-learn'
+        'scikit-learn',
+        'tqdm',
+        'matplotlib',
     ],
-    extras_require={
-        "tqdm": ["tqdm"],
-    },
     classifiers=[
         "Intended Audience :: Science/Research",
         "Programming Language :: Python",
