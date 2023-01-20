@@ -34,6 +34,7 @@ setuptools.setup(
         'scikit-learn',
         'tqdm',
         'matplotlib',
+        'importlib_resources; python_version < "3.9"',
     ],
     classifiers=[
         "Intended Audience :: Science/Research",
