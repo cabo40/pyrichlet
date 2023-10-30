@@ -18,7 +18,7 @@ class TestMixtureModels(BaseTest):
 
     def test_pitman_yor_process(self):
         n = 10
-        mixture = mm.PitmanYorMixture(rng=self.rng)
+        mixture = mm.PitmanYorMixture(pyd=0.1, rng=self.rng)
         mixture.fit_variational(self.y, n_groups=n)
         assert mixture.var_converged
 
@@ -30,7 +30,7 @@ class TestMixtureModels(BaseTest):
 
     def test_equal_weighting(self):
         n = 10
-        mixture = mm.EqualWeightedMixture(n=n)
+        mixture = mm.EqualWeightedMixture(n=n, rng=self.rng)
         mixture.fit_variational(self.y)
         assert mixture.var_converged
 
