@@ -448,6 +448,16 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                         # ax.plot(y_range, dens, c=color[j])
                         ax.fill_between(y_range, dens, interpolate=True,
                                         color=color[j], alpha=0.5)
+                    for j in range(len(self.map_sim_params['w'])):
+                        if j in grp:
+                            continue
+                        dens = self.gibbs_map_density(y_range, dim=it,
+                                                      component=j)
+                        if max(dens) > 1e-4:
+                            ax.fill_between(y_range, dens, interpolate=True,
+                                            color='black', alpha=0.25)
+                    dens = self.gibbs_map_density(y_range, dim=it)
+                    ax.plot(y_range, dens, color='black')
                 else:
                     ax.scatter(self.y[:, it], self.y[:, it2], s=10,
                                c=color[grp], alpha=0.5)
