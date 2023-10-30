@@ -74,18 +74,18 @@ def mixture_density(x, w, theta, dim=None, component=None):
             ret.append(multivariate_normal.pdf(x,
                                                theta[j][0],
                                                theta[j][1],
-                                               1))
+                                               1)*w[j])
         elif type(dim) in [list, np.ndarray]:
             ret.append(multivariate_normal.pdf(x,
                                                theta[j][0][dim],
                                                theta[j][1][:, dim][dim, :],
-                                               1))
+                                               1)*w[j])
         elif type(dim) is int:
             ret.append(norm.pdf(x[:, 0],
                                 theta[j][0][dim],
-                                np.sqrt(theta[j][1][dim, dim])))
+                                np.sqrt(theta[j][1][dim, dim]))*w[j])
     ret = np.array(ret).T
-    ret = np.atleast_2d(ret).mean(1)
+    ret = np.atleast_2d(ret).sum(1)
     return ret
 
 
