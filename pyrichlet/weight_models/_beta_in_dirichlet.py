@@ -91,6 +91,9 @@ class BetaInDirichlet(BaseWeight):
                 self._d_base = np.append(self._d_base,
                                          gumbel_max_sampling(log_prob,
                                                              rng=self._rng))
+            if max(self._d_base) <= len(self._v_base):
+                self._v_base = np.concatenate((
+                    self._v_base, [self._rng.beta(a=1, b=self.alpha)]))
         self._count_base = [
             np.sum(self._d_base == j) for j in range(len(self._v_base))]
         self.v = self._v_base[self._d_base]
