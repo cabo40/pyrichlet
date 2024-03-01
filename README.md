@@ -26,7 +26,7 @@ pip install pyrichlet==0.0.9
 # Usage
 
 This is a quick guide. For a more detailed usage see
-https://pyrichlet.readthedocs.io/en/latest/index.html.
+https://pyrichlet.readthedocs.io/en/main/index.html.
 
 
 The mixture models that this package implements are
