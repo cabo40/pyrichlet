@@ -383,6 +383,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
     def gibbs_map_pairplot(self):
         import matplotlib.pyplot as plt
         import matplotlib.ticker as ticker
+        from matplotlib.ticker import FormatStrFormatter
         from scipy.stats import chi2
         from scipy.linalg import ldl
 
@@ -458,6 +459,10 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                                             color='black', alpha=0.25)
                     dens = self.gibbs_map_density(y_range, dim=it)
                     ax.plot(y_range, dens, color='black')
+                    if max(dens) < 0.001 or min(dens) > 99999:
+                        ax.yaxis.set_major_formatter(FormatStrFormatter('%.1E'))
+                    else:
+                        ax.yaxis.set_major_formatter(FormatStrFormatter('%.2g'))
                 else:
                     ax.scatter(self.y[:, it], self.y[:, it2], s=10,
                                c=color[grp], alpha=0.5)
@@ -477,7 +482,6 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                         ax.plot(circle_points[:, 0], circle_points[:, 1],
                                 linestyle='--', c=color[j])
                         # break
-            axes[it, it].tick_params(axis='y', colors='white')
 
     def var_eap_density(self, y=None, dim=None, component=None):
         """
