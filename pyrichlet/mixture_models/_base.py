@@ -114,7 +114,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
 
         init_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
-            the  initial number of groups is drawn from the attribute n.
+            the  initial number of groups is drawn from the weighting structure
+            model's attribute `n`.
+            This parameter is only used in k-means initialization.
 
         warm_start : bool, default=False
             Whether to continue the sampling process from a past run or start
@@ -198,7 +200,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         init_method : str, default="kmeans"
             "kmeans": initialize variational parameters using k-means algorithm
             "random": initialize variational parameters using a random
-                assignment
+            assignment
         """
         if show_progress is not None:
             self.show_progress = show_progress
@@ -335,13 +337,14 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         `fit_gibbs`.
         It returns the EAP consensus clustering for the observations `y`.
         It uses the spectral clustering algorithm over the EAP affinity matrix
-         as consensus algorithm.
+        as consensus algorithm.
 
         Parameters
         ----------
         y : {array-like} of shape (n_samples, n_features), default=None
             The data points to cluster. If `None`
             the data used at fitting is used.
+
         n_clusters: int, default=1
             The number of clusters to output.
         """
@@ -750,7 +753,9 @@ class BaseGaussianMixture(metaclass=ABCMeta):
         ----------
         init_groups: int, default=None
             Maximum number of groups to assign in the initialization. If None,
-            the  initial number of groups is drawn from the attribute n.
+            the  initial number of groups is drawn from the weighting structure
+            model's attribute `n`.
+            This parameter is only used in k-means initialization.
         method: str
             "kmeans": does a kmeans initialization
             "random": does a random initialization based on the prior models
@@ -789,8 +794,7 @@ class BaseGaussianMixture(metaclass=ABCMeta):
                 if init_groups is not None:
                     n = init_groups
                 else:
-                    raise ValueError("init_groups must be an integer for"
-                                     " k-means initialization")
+                    n = 2
             self.d = _utils.kmeans_cluster_size_biased(self.y, n, self.rng)
         elif method == "random":
             self.d = self.weight_model.random_assignment(len(self.y))

@@ -1,3 +1,8 @@
+[![Documentation Status](https://readthedocs.org/projects/pyrichlet/badge/?version=main)](https://pyrichlet.readthedocs.io/en/main/?badge=main)
+![PyPI - Version](https://img.shields.io/pypi/v/pyrichlet)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyrichlet)
+<!---[Static Badge](https://img.shields.io/badge/DOI-doi-blue)-->
+
 # Project description
 
 Pyrichlet is a package for doing density estimation and clustering using 

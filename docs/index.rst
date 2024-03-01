@@ -12,11 +12,10 @@ Welcome to pyrichlet's documentation!
 
    installation
    usage
-   api
+   models
 
-Indices and tables
-==================
+.. toctree::
+   :caption: Reference:
+   :hidden:
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   Index <genindex>
