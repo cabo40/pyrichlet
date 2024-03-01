@@ -19,7 +19,7 @@ pip install pyrichlet
 For a specific version:
 
 ```
-pip install pyrichlet==0.0.4
+pip install pyrichlet==0.0.9
 ```
 
 
@@ -48,7 +48,7 @@ from pyrichlet import mixture_models
 
 mm = mixture_models.DirichletProcessMixture()
 y = [1, 2, 3, 4]
-mm.fit_gibbs(y)
+mm.fit_gibbs(y, init_groups=2)
 
 mm.fit_variational(y, n_groups=2)
 ```
